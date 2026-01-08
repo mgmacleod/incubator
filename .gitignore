@@ -1,0 +1,158 @@
+# Project Incubator .gitignore
+
+# OS Generated Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+.project
+.classpath
+.settings/
+*.sublime-*
+.vs/
+
+# Environment Files (may contain secrets)
+.env
+.env.local
+.env.*.local
+*.env
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Dependencies (Node.js)
+node_modules/
+jspm_packages/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Dependencies (Python)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Dependencies (Go)
+vendor/
+go.sum
+
+# Dependencies (Ruby)
+.bundle/
+vendor/bundle/
+
+# Dependencies (Java)
+target/
+*.class
+*.jar
+*.war
+*.ear
+
+# Build Outputs
+dist/
+build/
+out/
+*.out
+*.exe
+*.dll
+*.so
+*.dylib
+bin/
+obj/
+
+# Test Coverage
+coverage/
+.nyc_output/
+
+# Temporary Files
+tmp/
+temp/
+*.tmp
+*.temp
+*.cache
+.cache/
+
+# Database Files
+*.db
+*.sqlite
+*.sqlite3
+
+# Compiled Files
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+*.pyc
+*.pyo
+
+# Package Files
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Large Media Files (use Git LFS if needed)
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.mp3
+*.wav
+*.flac
+
+# Secrets and Credentials
+secrets/
+credentials/
+*.pem
+*.key
+*.cert
+*.crt
+id_rsa*
+*.pfx
+
+# Cloud and Infrastructure
+.terraform/
+*.tfstate
+*.tfstate.backup
+.aws/
+.azure/
+.gcloud/
+
+# Docker
+.dockerignore
