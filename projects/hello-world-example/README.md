@@ -30,6 +30,13 @@ Expected output:
 ```
 Hello from the Project Incubator!
 This is an example project to help you get started.
+
+Key takeaways:
+- Projects are self-contained in their own folders
+- Each project has its own README.md
+- Keep it simple and start experimenting!
+
+Check the _template folder for a project template.
 ```
 
 ## Project Structure
