@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Elements - Periodic Table of Neural Networks</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Neural Elements</h1>
+        <p class="subtitle">A Periodic Table of Neural Networks</p>
+    </header>
+
+    <main>
+        <!-- Navigation Tabs -->
+        <nav class="tabs">
+            <button class="tab active" data-tab="periodic-table">Periodic Table</button>
+            <button class="tab" data-tab="training-lab">Training Lab</button>
+            <button class="tab" data-tab="experiments">Experiments</button>
+            <button class="tab" data-tab="compare">Compare Elements</button>
+            <button class="tab" data-tab="about">About</button>
+        </nav>
+
+        <!-- Periodic Table View -->
+        <section id="periodic-table" class="tab-content active">
+            <div class="table-container">
+                <div id="periodic-table-grid"></div>
+            </div>
+
+            <div id="element-detail" class="element-detail hidden">
+                <div class="element-header">
+                    <h2 id="element-name"></h2>
+                    <button class="close-btn" onclick="closeElementDetail()">&times;</button>
+                </div>
+                <div class="element-body">
+                    <div class="element-info">
+                        <div class="info-group">
+                            <h3>Architecture</h3>
+                            <p id="element-architecture"></p>
+                        </div>
+                        <div class="info-group">
+                            <h3>Properties</h3>
+                            <ul id="element-properties"></ul>
+                        </div>
+                        <div class="info-group">
+                            <h3>Activation</h3>
+                            <p id="element-activation"></p>
+                        </div>
+                    </div>
+                    <div class="element-viz">
+                        <h3>Decision Boundary Preview</h3>
+                        <div id="element-preview"></div>
+                        <button class="btn primary" onclick="openInTrainingLab()">
+                            Train in Lab
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Training Lab -->
+        <section id="training-lab" class="tab-content">
+            <div class="lab-container">
+                <div class="lab-controls">
+                    <h2>Training Lab</h2>
+
+                    <div class="control-group">
+                        <label>Dataset</label>
+                        <select id="dataset-select">
+                            <option value="spirals">Spirals</option>
+                            <option value="xor">XOR</option>
+                            <option value="moons">Moons</option>
+                            <option value="circles">Circles</option>
+                            <option value="gaussian_clusters">Gaussian Clusters</option>
+                            <option value="checkerboard">Checkerboard</option>
+                            <option value="rings">Rings</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group">
+                        <label>Activation Function</label>
+                        <select id="activation-select">
+                            <option value="relu">ReLU</option>
+                            <option value="tanh">Tanh</option>
+                            <option value="sigmoid">Sigmoid</option>
+                            <option value="sine">Sine</option>
+                            <option value="gelu">GELU</option>
+                            <option value="swish">Swish</option>
+                            <option value="linear">Linear</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group">
+                        <label>Hidden Layers</label>
+                        <input type="text" id="layers-input" value="4,4"
+                               placeholder="e.g., 4,4 or 8,8,8">
+                        <small>Comma-separated widths</small>
+                    </div>
+
+                    <div class="control-group">
+                        <label>Epochs: <span id="epochs-value">500</span></label>
+                        <input type="range" id="epochs-slider" min="100" max="2000" value="500" step="100">
+                    </div>
+
+                    <button class="btn primary" id="train-btn" onclick="startTraining()">
+                        Start Training
+                    </button>
+
+                    <div class="training-stats hidden" id="training-stats">
+                        <div class="stat">
+                            <span class="stat-label">Epoch</span>
+                            <span class="stat-value" id="current-epoch">0</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Loss</span>
+                            <span class="stat-value" id="current-loss">-</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Accuracy</span>
+                            <span class="stat-value" id="current-accuracy">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lab-visualization">
+                    <div class="viz-container">
+                        <h3>Decision Boundary</h3>
+                        <div id="decision-boundary-viz"></div>
+                    </div>
+                    <div class="viz-container">
+                        <h3>Training Progress</h3>
+                        <div id="training-progress-viz"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Experiments (Bulk Training) -->
+        <section id="experiments" class="tab-content">
+            <div class="experiments-container">
+                <h2>Bulk Training Experiments</h2>
+                <p class="section-desc">Run multiple training configurations in parallel and compare results.</p>
+
+                <div class="experiments-layout">
+                    <!-- Job Configuration -->
+                    <div class="experiment-config">
+                        <h3>Configure Experiment</h3>
+
+                        <div class="config-section">
+                            <h4>Network Depth</h4>
+                            <div class="depth-options checkbox-group">
+                                <label><input type="checkbox" value="1" checked> 1 layer</label>
+                                <label><input type="checkbox" value="2" checked> 2 layers</label>
+                                <label><input type="checkbox" value="3"> 3 layers</label>
+                            </div>
+                        </div>
+
+                        <div class="config-section">
+                            <h4>Layer Width</h4>
+                            <div class="width-options checkbox-group">
+                                <label><input type="checkbox" value="2"> 2 neurons</label>
+                                <label><input type="checkbox" value="4" checked> 4 neurons</label>
+                                <label><input type="checkbox" value="8"> 8 neurons</label>
+                            </div>
+                        </div>
+
+                        <div class="config-section">
+                            <h4>Activation Functions</h4>
+                            <div class="activation-options checkbox-group">
+                                <label><input type="checkbox" value="relu" checked> ReLU</label>
+                                <label><input type="checkbox" value="tanh" checked> Tanh</label>
+                                <label><input type="checkbox" value="sigmoid"> Sigmoid</label>
+                                <label><input type="checkbox" value="gelu"> GELU</label>
+                            </div>
+                        </div>
+
+                        <div class="config-section">
+                            <h4>Datasets</h4>
+                            <div class="checkbox-group" id="bulk-datasets">
+                                <!-- Populated from API -->
+                            </div>
+                        </div>
+
+                        <div class="config-section">
+                            <h4>Training Settings</h4>
+                            <div class="training-settings">
+                                <div class="setting">
+                                    <label>Epochs:</label>
+                                    <input type="number" id="bulk-epochs" value="500" min="100" max="2000" step="100">
+                                </div>
+                                <div class="setting">
+                                    <label>Learning Rate:</label>
+                                    <input type="number" id="bulk-lr" value="0.1" step="0.01" min="0.01" max="1.0">
+                                </div>
+                                <div class="setting">
+                                    <label>Trials per config:</label>
+                                    <input type="number" id="bulk-trials" value="1" min="1" max="5">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="config-summary" id="config-summary">
+                            <!-- Shows total runs calculation -->
+                        </div>
+
+                        <button class="btn primary" id="start-bulk-btn" onclick="startBulkTraining()">
+                            Start Bulk Training
+                        </button>
+                    </div>
+
+                    <!-- Jobs Panel -->
+                    <div class="jobs-panel">
+                        <div class="active-jobs">
+                            <h3>Active Jobs</h3>
+                            <div id="active-jobs-list">
+                                <p class="no-data">No active jobs</p>
+                            </div>
+                        </div>
+
+                        <div class="completed-jobs">
+                            <h3>Completed Experiments</h3>
+                            <div id="completed-jobs-list">
+                                <p class="no-data">No completed experiments yet</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Analysis -->
+                <div class="results-analysis" id="results-analysis" style="display: none;">
+                    <h3>Results Comparison</h3>
+                    <div class="results-layout">
+                        <div id="comparison-chart"></div>
+                        <div id="best-performers"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Compare Elements -->
+        <section id="compare" class="tab-content">
+            <div class="compare-container">
+                <h2>Compare Elements</h2>
+                <p>See how different architectures learn the same dataset.</p>
+
+                <div class="compare-controls">
+                    <div class="control-group">
+                        <label>Dataset</label>
+                        <select id="compare-dataset">
+                            <option value="spirals">Spirals</option>
+                            <option value="xor">XOR</option>
+                            <option value="moons">Moons</option>
+                            <option value="circles">Circles</option>
+                        </select>
+                    </div>
+                    <button class="btn primary" onclick="runComparison()">Run Comparison</button>
+                </div>
+
+                <div id="comparison-results" class="comparison-grid"></div>
+            </div>
+        </section>
+
+        <!-- About -->
+        <section id="about" class="tab-content">
+            <div class="about-container">
+                <h2>About Neural Elements</h2>
+
+                <div class="about-content">
+                    <h3>The Concept</h3>
+                    <p>
+                        Just as the periodic table organizes chemical elements by their fundamental properties,
+                        <strong>Neural Elements</strong> organizes neural network architectures by their
+                        structural characteristics and emergent behaviors.
+                    </p>
+
+                    <h3>The Table Structure</h3>
+                    <ul>
+                        <li><strong>Rows (Periods)</strong>: Network depth - more layers means more periods</li>
+                        <li><strong>Columns (Groups)</strong>: Activation functions - each has distinct properties</li>
+                        <li><strong>Properties</strong>: Parameter count, expressiveness, training dynamics</li>
+                    </ul>
+
+                    <h3>Why This Matters</h3>
+                    <p>
+                        By studying minimal neural networks systematically, we can discover patterns
+                        that illuminate the behavior of much larger models. Just as the periodic table
+                        revealed deep patterns in chemistry, a systematic study of neural architectures
+                        might reveal organizing principles in deep learning.
+                    </p>
+
+                    <h3>Key Insights</h3>
+                    <ul>
+                        <li>Depth enables learning non-linear decision boundaries</li>
+                        <li>Different activations create qualitatively different boundaries</li>
+                        <li>Small networks can learn surprisingly complex patterns</li>
+                        <li>Architecture determines capability more than size alone</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>Neural Elements - An experimental exploration of neural network fundamentals</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/periodic-table.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/training-lab.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/visualizations.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/experiments.js') }}"></script>
+    <script>
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab).classList.add('active');
+
+                // Initialize experiments tab when first opened
+                if (tab.dataset.tab === 'experiments' && !window.experimentsInitialized) {
+                    initExperiments();
+                    window.experimentsInitialized = true;
+                }
+            });
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadPeriodicTable();
+            initTrainingLab();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+# Core dependencies (all lightweight, CPU-friendly)
+numpy>=1.21.0
+flask>=2.0.0
+filelock>=3.0.0  # For atomic file operations in bulk training
+
+# Visualization
+matplotlib>=3.5.0
+
+# Optional: For extended experiments (uncomment if desired)
+# torch>=2.0.0  # PyTorch for GPU acceleration
+# scikit-learn>=1.0.0  # For additional datasets and metrics
