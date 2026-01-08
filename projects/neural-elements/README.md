@@ -28,6 +28,7 @@ Just as chemistry discovered that ~100 elements combine in predictable ways to c
 - NumPy (core computations - no GPU required)
 - Flask (web interface)
 - D3.js (interactive visualizations)
+- Multiprocessing (parallel bulk training)
 - Optional: PyTorch (for extended experiments)
 
 ## Goals
@@ -95,7 +96,9 @@ neural-elements/
 │   │   ├── elements.py      # Neural element definitions
 │   │   ├── activations.py   # Activation functions
 │   │   ├── training.py      # Training loop and optimization
-│   │   └── properties.py    # Element property calculations
+│   │   ├── properties.py    # Element property calculations
+│   │   ├── persistence.py   # Experiment storage (JSON-based)
+│   │   └── jobs.py          # Background job management
 │   ├── datasets/
 │   │   ├── __init__.py
 │   │   └── toy.py           # Toy datasets (XOR, spirals, etc.)
@@ -105,7 +108,8 @@ neural-elements/
 │   │   └── interactive.py   # D3.js data generation
 │   └── web/
 │       ├── __init__.py
-│       └── app.py           # Flask application
+│       ├── app.py           # Flask application
+│       └── bulk_api.py      # Bulk training API endpoints
 ├── web/
 │   ├── templates/
 │   │   └── index.html
@@ -115,7 +119,12 @@ neural-elements/
 │       └── js/
 │           ├── periodic-table.js
 │           ├── training-lab.js
+│           ├── experiments.js   # Bulk training UI
 │           └── visualizations.js
+├── data/                        # Experiment storage (auto-created)
+│   ├── index.json
+│   ├── jobs.json
+│   └── experiments/
 └── examples/
     └── explore_elements.py
 ```
@@ -156,13 +165,21 @@ Select an element and dataset, then watch training in real-time:
 - Gradient flow visualization
 - Activation distributions
 
-### 3. Synthesis Workbench
+### 3. Bulk Training & Experiments
+Run grid searches across multiple configurations in parallel:
+- Select network depths, widths, activations, and datasets
+- Training runs in background using multiprocessing
+- Results stored with full weights for later analysis
+- Accuracy heatmaps for comparing configurations
+- Load saved experiments back into Training Lab
+
+### 4. Synthesis Workbench
 Combine multiple elements to create "molecular" architectures:
 - Stack elements (sequential composition)
 - Branch elements (parallel paths)
 - Skip connections (residual combinations)
 
-### 4. Discovery Mode
+### 5. Discovery Mode
 Systematically explore the element space:
 - Run experiments across many elements
 - Find patterns in what architectures learn
@@ -176,9 +193,50 @@ Systematically explore the element space:
 - [x] Visualization utilities
 - [x] Web interface with periodic table view
 - [x] Interactive training lab
+- [x] Bulk training with parallel execution
+- [x] Weight persistence (JSON storage)
+- [x] Cross-tab experiment loading
 - [ ] Synthesis workbench (in progress)
 - [ ] Discovery mode automation
 - [ ] Extended element library
+
+## Bulk Training API
+
+The bulk training system provides a REST API for running experiments programmatically:
+
+```bash
+# Submit a bulk training job
+curl -X POST http://localhost:5000/api/bulk/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "elements": [
+      {"hidden_layers": [4], "activation": "relu"},
+      {"hidden_layers": [4, 4], "activation": "tanh"}
+    ],
+    "datasets": ["spirals", "xor"],
+    "training": {"epochs": 500, "learning_rate": 0.1}
+  }'
+
+# Check job status
+curl http://localhost:5000/api/bulk/jobs/<job_id>
+
+# Get results with accuracy summary
+curl http://localhost:5000/api/bulk/jobs/<job_id>/results
+
+# Load a saved experiment with weights
+curl http://localhost:5000/api/bulk/experiments/<experiment_id>
+```
+
+### Key Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/bulk/jobs` | POST | Submit bulk training job |
+| `/api/bulk/jobs` | GET | List all jobs |
+| `/api/bulk/jobs/<id>` | GET | Get job status/progress |
+| `/api/bulk/jobs/<id>/results` | GET | Get results with summary |
+| `/api/bulk/experiments/<id>` | GET | Load experiment with weights |
+| `/api/bulk/experiments/<id>/training-lab` | GET | Get experiment in Training Lab format |
 
 ## Notes and Learnings
 
