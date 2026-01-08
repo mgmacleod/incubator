@@ -238,9 +238,74 @@ curl http://localhost:5000/api/bulk/experiments/<experiment_id>
 | `/api/bulk/experiments/<id>` | GET | Load experiment with weights |
 | `/api/bulk/experiments/<id>/training-lab` | GET | Get experiment in Training Lab format |
 
+## Experimental Results (2,316 experiments)
+
+### Key Discoveries
+
+#### 1. Sigmoid Collapse with Depth
+Sigmoid networks degrade predictably with depth due to vanishing gradients:
+| Depth | Accuracy | Change |
+|-------|----------|--------|
+| 1 layer | 70.2% | - |
+| 2 layers | 64.4% | -5.8% |
+| 3 layers | 60.5% | -3.9% |
+| 4 layers | 56.5% | -4.1% |
+| 5 layers | **48.6%** | -7.8% |
+
+At 5 layers, sigmoid performs **worse than random chance**.
+
+#### 2. Sine Activation is Exceptional
+- **100% XOR success** - every trial achieved perfect accuracy
+- **Best on spirals** - maintains 77% accuracy at 5 layers while others degrade
+- Stable training dynamics across all depths
+
+#### 3. Activation Ranking (Overall)
+| Rank | Activation | Avg Accuracy |
+|------|------------|--------------|
+| 1 | Leaky ReLU | 88.7% |
+| 2 | Tanh | 87.2% |
+| 3 | GELU | 87.2% |
+| 4 | Sine | 87.1% |
+| 5 | ReLU | 86.5% |
+| 6 | Swish | 80.6% |
+| 7 | Linear | 63.8% |
+| 8 | Sigmoid | 63.7% |
+
+#### 4. Width vs Depth Trade-off
+For ReLU networks with similar parameter counts:
+- `[8]` (1 layer): **90.7%**
+- `[4, 4]` (2 layers): 87.9%
+- `[2, 2, 2]` (3 layers): **73.0%**
+
+**Lesson:** Width beats depth when networks are narrow. The 2-neuron bottleneck is devastating.
+
+#### 5. Dataset-Specific Patterns
+| Dataset | Best Activation | Accuracy |
+|---------|-----------------|----------|
+| XOR | Sine | 100% |
+| Moons | Leaky ReLU | 93.6% |
+| Circles | Leaky ReLU | 94.3% |
+| Spirals | Sine | 72.9% |
+
+### Visualizations
+
+Generated charts are in `visualizations/`:
+- `periodic_table_heatmap.png` - Full accuracy heatmap by depth × activation
+- `depth_effect.png` - How each activation responds to depth
+- `dataset_comparison.png` - Performance breakdown by dataset
+- `width_effect.png` - Width vs depth trade-offs
+
 ## Notes and Learnings
 
-*To be updated as the project evolves*
+### What the Periodic Table Reveals
+1. **Columns (activations) define capability families** - sigmoid/linear can't solve nonlinear tasks
+2. **Rows (depth) show scaling behavior** - some activations benefit, others collapse
+3. **Blocks (width) set minimum viable capacity** - below width=4, everything struggles
+
+### Unexpected Findings
+- **Swish underperformed** - expected GELU-like behavior but was much worse
+- **Sine is the dark horse** - not commonly used but exceptional on difficult tasks
+- **Leaky ReLU > ReLU** - the small leak makes a meaningful difference
 
 ## Future Ideas
 
