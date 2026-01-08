@@ -18,6 +18,7 @@
         <nav class="tabs">
             <button class="tab active" data-tab="periodic-table">Periodic Table</button>
             <button class="tab" data-tab="training-lab">Training Lab</button>
+            <button class="tab" data-tab="experiments">Experiments</button>
             <button class="tab" data-tab="compare">Compare Elements</button>
             <button class="tab" data-tab="about">About</button>
         </nav>
@@ -136,6 +137,108 @@
             </div>
         </section>
 
+        <!-- Experiments (Bulk Training) -->
+        <section id="experiments" class="tab-content">
+            <div class="experiments-container">
+                <h2>Bulk Training Experiments</h2>
+                <p class="section-desc">Run multiple training configurations in parallel and compare results.</p>
+
+                <div class="experiments-layout">
+                    <!-- Job Configuration -->
+                    <div class="experiment-config">
+                        <h3>Configure Experiment</h3>
+
+                        <div class="config-section">
+                            <h4>Network Depth</h4>
+                            <div class="depth-options checkbox-group">
+                                <label><input type="checkbox" value="1" checked> 1 layer</label>
+                                <label><input type="checkbox" value="2" checked> 2 layers</label>
+                                <label><input type="checkbox" value="3"> 3 layers</label>
+                            </div>
+                        </div>
+
+                        <div class="config-section">
+                            <h4>Layer Width</h4>
+                            <div class="width-options checkbox-group">
+                                <label><input type="checkbox" value="2"> 2 neurons</label>
+                                <label><input type="checkbox" value="4" checked> 4 neurons</label>
+                                <label><input type="checkbox" value="8"> 8 neurons</label>
+                            </div>
+                        </div>
+
+                        <div class="config-section">
+                            <h4>Activation Functions</h4>
+                            <div class="activation-options checkbox-group">
+                                <label><input type="checkbox" value="relu" checked> ReLU</label>
+                                <label><input type="checkbox" value="tanh" checked> Tanh</label>
+                                <label><input type="checkbox" value="sigmoid"> Sigmoid</label>
+                                <label><input type="checkbox" value="gelu"> GELU</label>
+                            </div>
+                        </div>
+
+                        <div class="config-section">
+                            <h4>Datasets</h4>
+                            <div class="checkbox-group" id="bulk-datasets">
+                                <!-- Populated from API -->
+                            </div>
+                        </div>
+
+                        <div class="config-section">
+                            <h4>Training Settings</h4>
+                            <div class="training-settings">
+                                <div class="setting">
+                                    <label>Epochs:</label>
+                                    <input type="number" id="bulk-epochs" value="500" min="100" max="2000" step="100">
+                                </div>
+                                <div class="setting">
+                                    <label>Learning Rate:</label>
+                                    <input type="number" id="bulk-lr" value="0.1" step="0.01" min="0.01" max="1.0">
+                                </div>
+                                <div class="setting">
+                                    <label>Trials per config:</label>
+                                    <input type="number" id="bulk-trials" value="1" min="1" max="5">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="config-summary" id="config-summary">
+                            <!-- Shows total runs calculation -->
+                        </div>
+
+                        <button class="btn primary" id="start-bulk-btn" onclick="startBulkTraining()">
+                            Start Bulk Training
+                        </button>
+                    </div>
+
+                    <!-- Jobs Panel -->
+                    <div class="jobs-panel">
+                        <div class="active-jobs">
+                            <h3>Active Jobs</h3>
+                            <div id="active-jobs-list">
+                                <p class="no-data">No active jobs</p>
+                            </div>
+                        </div>
+
+                        <div class="completed-jobs">
+                            <h3>Completed Experiments</h3>
+                            <div id="completed-jobs-list">
+                                <p class="no-data">No completed experiments yet</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Analysis -->
+                <div class="results-analysis" id="results-analysis" style="display: none;">
+                    <h3>Results Comparison</h3>
+                    <div class="results-layout">
+                        <div id="comparison-chart"></div>
+                        <div id="best-performers"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- Compare Elements -->
         <section id="compare" class="tab-content">
             <div class="compare-container">
@@ -206,6 +309,7 @@
     <script src="{{ url_for('static', filename='js/periodic-table.js') }}"></script>
     <script src="{{ url_for('static', filename='js/training-lab.js') }}"></script>
     <script src="{{ url_for('static', filename='js/visualizations.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/experiments.js') }}"></script>
     <script>
         // Tab switching
         document.querySelectorAll('.tab').forEach(tab => {
@@ -215,6 +319,12 @@
 
                 tab.classList.add('active');
                 document.getElementById(tab.dataset.tab).classList.add('active');
+
+                // Initialize experiments tab when first opened
+                if (tab.dataset.tab === 'experiments' && !window.experimentsInitialized) {
+                    initExperiments();
+                    window.experimentsInitialized = true;
+                }
             });
         });
 

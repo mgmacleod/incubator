@@ -93,6 +93,9 @@ async function showElementDetail(elementName) {
         selectedElement = data;
         displayElementDetail(data);
 
+        // Load experiment history for this element
+        loadElementExperiments(elementName);
+
         // Show overlay
         showOverlay();
     } catch (error) {
@@ -168,5 +171,88 @@ function hideOverlay() {
     const overlay = document.querySelector('.overlay');
     if (overlay) {
         overlay.classList.add('hidden');
+    }
+}
+
+/**
+ * Load experiment history for an element.
+ */
+async function loadElementExperiments(elementName) {
+    const previewContainer = document.getElementById('element-preview');
+
+    try {
+        const response = await fetch(`/api/bulk/experiments/by-element/${elementName}`);
+        const data = await response.json();
+
+        if (data.experiments && data.experiments.length > 0) {
+            displayElementExperiments(data.experiments, previewContainer);
+        } else {
+            previewContainer.innerHTML = `
+                <p style="color: var(--text-muted);">No saved experiments for this element.</p>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">Click "Train in Lab" or run bulk experiments to create some.</p>
+            `;
+        }
+    } catch (error) {
+        console.error('Failed to load element experiments:', error);
+        previewContainer.innerHTML = `
+            <p style="color: var(--text-muted);">Click "Train in Lab" to see this element in action</p>
+        `;
+    }
+}
+
+/**
+ * Display experiment history in the element detail view.
+ */
+function displayElementExperiments(experiments, container) {
+    // Group by dataset
+    const byDataset = {};
+    experiments.forEach(exp => {
+        const dataset = exp.dataset || 'unknown';
+        if (!byDataset[dataset]) {
+            byDataset[dataset] = [];
+        }
+        byDataset[dataset].push(exp);
+    });
+
+    let html = '<div class="element-experiments">';
+    html += '<h4 style="margin-bottom: 0.75rem; color: var(--text-muted);">Saved Experiments</h4>';
+
+    // Show best result per dataset
+    html += '<div class="experiment-list">';
+    for (const [dataset, exps] of Object.entries(byDataset)) {
+        const best = exps[0]; // Already sorted by accuracy
+        html += `
+            <div class="experiment-item" onclick="loadExperimentFromTable('${best.experiment_id}')" style="cursor: pointer;">
+                <span class="dataset-name">${dataset}</span>
+                <span class="accuracy">${((best.final_accuracy || 0) * 100).toFixed(1)}%</span>
+            </div>
+        `;
+    }
+    html += '</div>';
+
+    if (experiments.length > Object.keys(byDataset).length) {
+        html += `<p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">
+            ${experiments.length} total experiments
+        </p>`;
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+/**
+ * Load an experiment from the periodic table detail view.
+ */
+async function loadExperimentFromTable(experimentId) {
+    // Close the element detail
+    closeElementDetail();
+
+    // Use the experiments.js function if available
+    if (typeof loadExperimentInTrainingLab === 'function') {
+        loadExperimentInTrainingLab(experimentId);
+    } else {
+        // Fallback: switch to Training Lab and show message
+        document.querySelector('[data-tab="training-lab"]').click();
+        alert('Experiment loading not available. Please check the Experiments tab.');
     }
 }

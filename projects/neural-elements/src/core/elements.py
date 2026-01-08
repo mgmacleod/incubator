@@ -345,9 +345,14 @@ class NeuralElement:
         )
         return new_element
 
-    def to_dict(self) -> Dict:
-        """Serialize element to dictionary."""
-        return {
+    def to_dict(self, include_weights: bool = False) -> Dict:
+        """
+        Serialize element to dictionary.
+
+        Args:
+            include_weights: If True, include weight matrices for persistence.
+        """
+        data = {
             'name': self.name,
             'config': {
                 'hidden_layers': self.config.hidden_layers,
@@ -366,11 +371,38 @@ class NeuralElement:
             'history': self.history,
         }
 
+        if include_weights:
+            data['weights'] = [w.tolist() for w in self.weights]
+            data['biases'] = [b.tolist() if b is not None else None for b in self.biases]
+
+        return data
+
+    def load_weights(self, weights: List[List], biases: List[List]):
+        """
+        Load pre-trained weights into the element.
+
+        Args:
+            weights: List of weight matrices as nested lists.
+            biases: List of bias vectors as lists.
+        """
+        if len(weights) != len(self.weights):
+            raise ValueError(f"Expected {len(self.weights)} weight matrices, got {len(weights)}")
+
+        self.weights = [np.array(w) for w in weights]
+        self.biases = [np.array(b) if b is not None else None for b in biases]
+        self.trained = True
+
     @classmethod
-    def from_dict(cls, data: Dict) -> 'NeuralElement':
-        """Create element from dictionary."""
+    def from_dict(cls, data: Dict, load_weights: bool = True) -> 'NeuralElement':
+        """
+        Create element from dictionary.
+
+        Args:
+            data: Serialized element dictionary.
+            load_weights: If True and weights are present, load them.
+        """
         config = data['config']
-        return cls(
+        element = cls(
             hidden_layers=config['hidden_layers'],
             activation=config['activation'],
             input_dim=config['input_dim'],
@@ -378,6 +410,13 @@ class NeuralElement:
             bias=config['bias'],
             name=data['name']
         )
+
+        if load_weights and 'weights' in data and data['weights']:
+            element.load_weights(data['weights'], data['biases'])
+            element.history = data.get('history', {'loss': [], 'accuracy': []})
+            element.trained = data.get('trained', True)
+
+        return element
 
     def __repr__(self):
         arch = f"{self.config.input_dim}→" + "→".join(map(str, self.config.hidden_layers)) + f"→{self.config.output_dim}"

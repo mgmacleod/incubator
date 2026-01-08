@@ -1,6 +1,7 @@
 # Core dependencies (all lightweight, CPU-friendly)
 numpy>=1.21.0
 flask>=2.0.0
+filelock>=3.0.0  # For atomic file operations in bulk training
 
 # Visualization
 matplotlib>=3.5.0

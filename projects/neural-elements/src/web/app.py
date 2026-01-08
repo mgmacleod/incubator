@@ -6,12 +6,15 @@ Provides an interactive interface to explore the periodic table of neural networ
 
 import os
 import json
+import atexit
 from flask import Flask, render_template, jsonify, request
 import numpy as np
 
 from ..core.elements import NeuralElement, ElementRegistry, create_element
 from ..core.activations import ACTIVATIONS, list_activations
 from ..core.properties import compute_properties
+from ..core.persistence import ExperimentStore
+from ..core.jobs import JobManager
 from ..datasets.toy import DATASETS, get_dataset, list_datasets
 from ..visualization.interactive import (
     generate_decision_boundary_data,
@@ -19,9 +22,10 @@ from ..visualization.interactive import (
     generate_periodic_table_data,
     generate_element_card_data,
 )
+from .bulk_api import bulk_bp
 
 
-def create_app():
+def create_app(data_dir: str = None):
     """Create and configure the Flask application."""
     # Get the project root directory
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -34,6 +38,21 @@ def create_app():
 
     # Initialize element registry
     registry = ElementRegistry()
+
+    # Initialize storage and job manager for bulk training
+    if data_dir is None:
+        data_dir = os.path.join(project_root, 'data')
+    experiment_store = ExperimentStore(data_dir)
+    job_manager = JobManager(experiment_store, n_workers=4)
+
+    app.config['EXPERIMENT_STORE'] = experiment_store
+    app.config['JOB_MANAGER'] = job_manager
+
+    # Register bulk training API blueprint
+    app.register_blueprint(bulk_bp)
+
+    # Graceful shutdown of worker pool
+    atexit.register(job_manager.shutdown_pool)
 
     # Current state
     state = {
@@ -229,8 +248,10 @@ def main():
     print("Neural Elements - Periodic Table of Neural Networks")
     print("="*60)
     print("\nStarting server at http://localhost:5000")
+    print("Bulk training API available at /api/bulk/")
     print("Press Ctrl+C to stop\n")
-    app.run(debug=True, port=5000)
+    # Disable reloader to avoid multiprocessing issues
+    app.run(debug=True, port=5000, use_reloader=False)
 
 
 if __name__ == '__main__':
