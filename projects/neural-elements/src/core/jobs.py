@@ -460,3 +460,226 @@ class JobManager:
             except TimeoutError:
                 return False
         return True  # Job already completed
+
+    def submit_phase7_job(
+        self,
+        element_configs: List[Dict],
+        dataset_names: List[str],
+        training_config: Dict,
+        phase7_config: Dict,
+        n_trials: int = 1,
+        datasets: Optional[Dict[str, Tuple[np.ndarray, np.ndarray]]] = None
+    ) -> str:
+        """
+        Submit a Phase 7 generalization study job.
+
+        Args:
+            element_configs: List of element configuration dicts.
+            dataset_names: List of dataset names to train on.
+            training_config: Training configuration dict.
+            phase7_config: Phase 7 specific config:
+                - train_split: float (default 0.8)
+                - noise_levels: List[float] (default [0.0])
+                - sample_size: int (dataset sample size)
+            n_trials: Number of trials per configuration.
+            datasets: Pre-loaded datasets {name: (X, y)}.
+
+        Returns:
+            Job ID.
+        """
+        from ..datasets.toy import get_dataset
+
+        self.start_pool()
+
+        job_id = self.generate_job_id()
+        total_runs = len(element_configs) * len(dataset_names) * n_trials
+
+        job = BulkTrainingJob(
+            job_id=job_id,
+            created_at=datetime.now().isoformat(),
+            status=JobStatus.RUNNING,
+            element_configs=element_configs,
+            dataset_names=dataset_names,
+            training_config=training_config,
+            n_trials=n_trials,
+            total_runs=total_runs,
+            started_at=datetime.now().isoformat(),
+        )
+
+        self._save_job(job)
+
+        # Prepare all training tasks
+        tasks = []
+        for element_config in element_configs:
+            for dataset_name in dataset_names:
+                # Load dataset with enough samples
+                if datasets and dataset_name in datasets:
+                    X, y = datasets[dataset_name]
+                else:
+                    # Generate with sample size from phase7_config
+                    sample_size = phase7_config.get('sample_size', 500)
+                    X, y = get_dataset(dataset_name, n_samples=sample_size)
+
+                for trial in range(n_trials):
+                    experiment_id = self.store.generate_experiment_id()
+
+                    # Create metadata
+                    element = NeuralElement(**element_config)
+                    metadata = ExperimentMetadata(
+                        experiment_id=experiment_id,
+                        job_id=job_id,
+                        created_at=datetime.now().isoformat(),
+                        element_name=element.name,
+                        element_config=element_config,
+                        dataset_name=dataset_name,
+                        training_config=training_config,
+                        status='pending',
+                    )
+                    self.store.save_metadata(metadata)
+
+                    # Add task with phase7_config
+                    tasks.append((
+                        element_config,
+                        dataset_name,
+                        training_config,
+                        experiment_id,
+                        str(self.store.base_path),
+                        X,
+                        y,
+                        phase7_config,
+                    ))
+
+        # Submit tasks to pool
+        async_result = self._pool.map_async(
+            phase7_training_worker,
+            tasks,
+            callback=lambda results: self._finalize_job(job_id, results),
+            error_callback=lambda e: self._handle_job_error(job_id, e)
+        )
+
+        self._active_jobs[job_id] = async_result
+
+        return job_id
+
+
+def phase7_training_worker(args: Tuple) -> Dict:
+    """
+    Worker function for Phase 7 generalization experiments.
+
+    Handles train/test splits, evaluates on both sets, and computes
+    noise robustness metrics.
+
+    Args:
+        args: Tuple of (element_config, dataset_name, training_config,
+                       experiment_id, store_path, X, y, phase7_config)
+
+    Returns:
+        Dict with status, experiment_id, and results.
+    """
+    (element_config, dataset_name, training_config,
+     experiment_id, store_path, X, y, phase7_config) = args
+
+    try:
+        # Extract phase7 config
+        train_split = phase7_config.get('train_split', 0.8)
+        noise_levels = phase7_config.get('noise_levels', [0.0])
+        sample_size = phase7_config.get('sample_size', len(X))
+
+        # 1. Subsample to requested sample size if needed
+        if sample_size < len(X):
+            idx = np.random.choice(len(X), sample_size, replace=False)
+            X, y = X[idx], y[idx]
+
+        # 2. Split into train/test
+        n_train = int(len(X) * train_split)
+        indices = np.random.permutation(len(X))
+        train_idx, test_idx = indices[:n_train], indices[n_train:]
+        X_train, y_train = X[train_idx], y[train_idx]
+        X_test, y_test = X[test_idx], y[test_idx]
+
+        # 3. Create element and train on train set only
+        element = NeuralElement(**element_config)
+        start_time = time.time()
+        config = TrainingConfig(**training_config)
+        trainer = Trainer(element, config)
+        history = trainer.train(X_train, y_train)
+        training_time = time.time() - start_time
+
+        # 4. Evaluate on train and test sets
+        train_output = element.forward(X_train)
+        train_acc = float(np.mean((train_output > 0.5).astype(int) == y_train))
+
+        test_output = element.forward(X_test)
+        test_acc = float(np.mean((test_output > 0.5).astype(int) == y_test))
+
+        generalization_gap = train_acc - test_acc
+
+        # Compute test loss
+        test_loss = float(-np.mean(
+            y_test * np.log(test_output + 1e-15) +
+            (1 - y_test) * np.log(1 - test_output + 1e-15)
+        ))
+
+        # 5. Noise robustness (test-time noise only)
+        noise_robustness = {}
+        for noise_level in noise_levels:
+            if noise_level == 0.0:
+                noise_robustness[str(noise_level)] = test_acc
+            else:
+                X_noisy = X_test + np.random.normal(0, noise_level, X_test.shape)
+                noisy_output = element.forward(X_noisy)
+                noisy_acc = float(np.mean((noisy_output > 0.5).astype(int) == y_test))
+                noise_robustness[str(noise_level)] = noisy_acc
+
+        # 6. Store extended result
+        completed_at = datetime.now().isoformat()
+        result = TrainingResult(
+            experiment_id=experiment_id,
+            element_name=element.name,
+            weights=[w.tolist() for w in element.weights],
+            biases=[b.tolist() if b is not None else None for b in element.biases],
+            history=history,
+            final_loss=history['loss'][-1] if history['loss'] else 0.0,
+            final_accuracy=history['accuracy'][-1] if history['accuracy'] else 0.0,
+            training_time_seconds=training_time,
+            completed_at=completed_at,
+            # Phase 7 fields
+            train_accuracy=float(train_acc),
+            test_accuracy=float(test_acc),
+            test_loss=test_loss,
+            generalization_gap=float(generalization_gap),
+            noise_robustness=noise_robustness,
+            sample_size=sample_size,
+        )
+
+        # Save to store
+        store = ExperimentStore(store_path)
+        store.save_result(result)
+
+        return {
+            'status': 'completed',
+            'experiment_id': experiment_id,
+            'element_name': element.name,
+            'final_accuracy': result.final_accuracy,
+            'final_loss': result.final_loss,
+            'train_accuracy': train_acc,
+            'test_accuracy': test_acc,
+            'generalization_gap': generalization_gap,
+            'training_time': training_time,
+        }
+
+    except Exception as e:
+        error_info = {
+            'status': 'failed',
+            'experiment_id': experiment_id,
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+        }
+
+        try:
+            store = ExperimentStore(store_path)
+            store.update_status(experiment_id, 'failed', str(e))
+        except Exception:
+            pass
+
+        return error_info

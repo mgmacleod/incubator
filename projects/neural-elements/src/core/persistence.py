@@ -42,6 +42,14 @@ class TrainingResult:
     training_time_seconds: float
     completed_at: str
 
+    # Phase 7 generalization fields (optional for backward compatibility)
+    train_accuracy: Optional[float] = None
+    test_accuracy: Optional[float] = None
+    test_loss: Optional[float] = None
+    generalization_gap: Optional[float] = None
+    noise_robustness: Optional[Dict[str, float]] = None  # noise_level -> accuracy
+    sample_size: Optional[int] = None
+
 
 class ExperimentStore:
     """

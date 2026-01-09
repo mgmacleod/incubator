@@ -436,6 +436,93 @@ class Phase6Config:
         }
 
 
+@dataclass
+class Phase7Config:
+    """
+    Configuration for Phase 7: Generalization Study.
+
+    Tests whether neural elements generalize or just memorize by measuring:
+    - Generalization gap (train_acc - test_acc)
+    - Noise robustness (accuracy on noisy test data)
+    - Sample efficiency (accuracy at different sample sizes)
+
+    Experiment breakdown:
+    - 4 activations × 4 depths × 4 datasets × 4 sample_sizes × 20 trials = 5,120 experiments
+
+    Each experiment records train/test accuracy and noise robustness at multiple levels.
+    """
+
+    # Focus activations (consistent with Phase 6)
+    activations: List[str] = field(default_factory=lambda: [
+        'relu',        # Baseline
+        'sigmoid',     # Fails at depth - interesting generalization behavior?
+        'sine',        # Exceptional - sample efficient?
+        'tanh',        # Strong performer
+    ])
+
+    # Depths covering key transition points
+    depths: List[int] = field(default_factory=lambda: [1, 3, 5, 8])
+
+    # Fixed width (same as previous phases)
+    width: int = 8
+
+    # Datasets
+    datasets: List[str] = field(default_factory=lambda: [
+        'xor',
+        'moons',
+        'circles',
+        'spirals',
+    ])
+
+    # Number of trials for statistical robustness
+    n_trials: int = 20
+
+    # Phase 7 specific: generalization parameters
+    train_split: float = 0.8  # 80% train, 20% test
+    noise_levels: List[float] = field(default_factory=lambda: [0.0, 0.1, 0.2, 0.3])
+    sample_sizes: List[int] = field(default_factory=lambda: [50, 100, 200, 500])
+
+    # Training parameters
+    training_config: Dict[str, Any] = field(default_factory=lambda: {
+        'epochs': 1000,
+        'learning_rate': 0.1,
+        'record_every': 50,
+    })
+
+    def get_element_configs(self) -> List[Dict[str, Any]]:
+        """Generate all element configurations for Phase 7."""
+        configs = []
+        for activation in self.activations:
+            for depth in self.depths:
+                configs.append({
+                    'hidden_layers': [self.width] * depth,
+                    'activation': activation,
+                })
+        return configs
+
+    def get_total_experiments(self) -> int:
+        """Calculate total number of experiments."""
+        n_configs = len(self.activations) * len(self.depths)
+        return n_configs * len(self.datasets) * len(self.sample_sizes) * self.n_trials
+
+    def get_summary(self) -> Dict[str, Any]:
+        """Get a summary of the configuration."""
+        n_configs = len(self.activations) * len(self.depths)
+        return {
+            'activations': self.activations,
+            'depths': self.depths,
+            'width': self.width,
+            'datasets': self.datasets,
+            'n_trials': self.n_trials,
+            'sample_sizes': self.sample_sizes,
+            'noise_levels': self.noise_levels,
+            'train_split': self.train_split,
+            'n_element_configs': n_configs,
+            'total_experiments': self.get_total_experiments(),
+            'training_config': self.training_config,
+        }
+
+
 def estimate_runtime(
     n_experiments: int,
     n_workers: int = 8,
