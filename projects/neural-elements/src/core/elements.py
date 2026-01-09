@@ -114,6 +114,9 @@ class NeuralElement:
         self.trained = False
         self._training_snapshots: List[Dict] = []
 
+        # Layer freezing for transfer learning (Phase 8)
+        self.frozen_layers: List[bool] = []
+
     def _init_weights(self):
         """Initialize weights using Xavier/He initialization."""
         if self.seed is not None:
@@ -138,6 +141,9 @@ class NeuralElement:
 
             self.weights.append(W)
             self.biases.append(b)
+
+        # Initialize frozen_layers list after weights are created
+        self.frozen_layers = [False] * len(self.weights)
 
     def forward(self, X: np.ndarray, return_intermediates: bool = False) -> Any:
         """
@@ -296,8 +302,10 @@ class NeuralElement:
                 # Compute gradients
                 weight_grads, bias_grads = self.backward(X_batch, y_batch)
 
-                # Update weights
+                # Update weights (skip frozen layers)
                 for i in range(len(self.weights)):
+                    if self.frozen_layers[i]:
+                        continue  # Skip frozen layers
                     self.weights[i] -= learning_rate * weight_grads[i]
                     if self.biases[i] is not None:
                         self.biases[i] -= learning_rate * bias_grads[i]
@@ -444,6 +452,76 @@ class NeuralElement:
         self.weights = [np.array(w) for w in weights]
         self.biases = [np.array(b) if b is not None else None for b in biases]
         self.trained = True
+
+    # Layer freezing methods for Phase 8 transfer learning
+
+    def freeze_layer(self, layer_idx: int) -> None:
+        """
+        Freeze a layer to prevent weight updates during training.
+
+        Args:
+            layer_idx: Index of the layer to freeze (0-indexed).
+        """
+        if layer_idx < 0 or layer_idx >= len(self.weights):
+            raise ValueError(f"Layer index {layer_idx} out of range [0, {len(self.weights) - 1}]")
+        self.frozen_layers[layer_idx] = True
+
+    def unfreeze_layer(self, layer_idx: int) -> None:
+        """
+        Unfreeze a layer to allow weight updates during training.
+
+        Args:
+            layer_idx: Index of the layer to unfreeze (0-indexed).
+        """
+        if layer_idx < 0 or layer_idx >= len(self.weights):
+            raise ValueError(f"Layer index {layer_idx} out of range [0, {len(self.weights) - 1}]")
+        self.frozen_layers[layer_idx] = False
+
+    def freeze_all(self) -> None:
+        """Freeze all layers to prevent any weight updates."""
+        self.frozen_layers = [True] * len(self.weights)
+
+    def unfreeze_all(self) -> None:
+        """Unfreeze all layers to allow weight updates."""
+        self.frozen_layers = [False] * len(self.weights)
+
+    def freeze_bottom_k(self, k: int) -> None:
+        """
+        Freeze the bottom k layers (closest to input).
+
+        Args:
+            k: Number of layers to freeze from the input side.
+        """
+        for i in range(min(k, len(self.weights))):
+            self.frozen_layers[i] = True
+
+    def get_layer_output(self, X: np.ndarray, layer_idx: int) -> np.ndarray:
+        """
+        Get the output of a specific layer (for stacking).
+
+        Args:
+            X: Input data.
+            layer_idx: Index of the layer to get output from (0-indexed).
+                      Returns the activated output after that layer.
+
+        Returns:
+            Layer output as numpy array.
+        """
+        if layer_idx < 0 or layer_idx >= len(self.weights):
+            raise ValueError(f"Layer index {layer_idx} out of range [0, {len(self.weights) - 1}]")
+
+        _, intermediates = self.forward(X, return_intermediates=True)
+        # intermediates['activations'] has input at [0], then each layer's output
+        # So layer_idx=0 output is at activations[1]
+        return intermediates['activations'][layer_idx + 1]
+
+    def n_frozen_layers(self) -> int:
+        """Return the number of frozen layers."""
+        return sum(self.frozen_layers)
+
+    def is_fully_frozen(self) -> bool:
+        """Return True if all layers are frozen."""
+        return all(self.frozen_layers)
 
     @classmethod
     def from_dict(cls, data: Dict, load_weights: bool = True) -> 'NeuralElement':

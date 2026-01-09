@@ -523,6 +523,169 @@ class Phase7Config:
         }
 
 
+@dataclass
+class Phase8Config:
+    """
+    Configuration for Phase 8: Combination & Transfer.
+
+    Tests whether neural element properties are composable through:
+    - Stacking: Train element A, freeze, add element B on top
+    - Transfer: Train on dataset X, fine-tune on dataset Y
+    - Ensembles: Combine predictions from multiple elements
+
+    Experiment breakdown:
+    - Stacking: 4 activations × 2 bottom depths × 2 top depths × 4 datasets × 20 trials = 640
+    - Transfer: 4 activations × 4 pairs × 2 freeze modes × 20 trials = 640
+    - Ensembles: 4 activations × 3 sizes × 3 types × 4 datasets × 5 trials = 720
+    - Total: ~2,000 experiments
+    """
+
+    # Common parameters
+    activations: List[str] = field(default_factory=lambda: [
+        'relu',        # Baseline
+        'sigmoid',     # Fails at depth - interesting transfer behavior?
+        'sine',        # Exceptional - sample efficient?
+        'tanh',        # Strong performer
+    ])
+
+    datasets: List[str] = field(default_factory=lambda: [
+        'xor',
+        'moons',
+        'circles',
+        'spirals',
+    ])
+
+    width: int = 8
+    n_trials: int = 20
+
+    # Stacking config
+    stacking_bottom_depths: List[int] = field(default_factory=lambda: [1, 3])
+    stacking_top_depths: List[int] = field(default_factory=lambda: [1, 3])
+
+    # Transfer config
+    transfer_pairs: List[tuple] = field(default_factory=lambda: [
+        ('xor', 'moons'),
+        ('moons', 'xor'),
+        ('circles', 'spirals'),
+        ('spirals', 'circles'),
+    ])
+    transfer_freeze_modes: List[str] = field(default_factory=lambda: [
+        'freeze_all',   # Feature extraction: freeze all pretrained layers
+        'train_all',    # Fine-tuning: train all layers with pretrained init
+    ])
+    transfer_depth: int = 3  # Fixed depth for transfer experiments
+
+    # Ensemble config
+    ensemble_sizes: List[int] = field(default_factory=lambda: [3, 5, 7])
+    ensemble_types: List[str] = field(default_factory=lambda: [
+        'voting',     # Majority vote
+        'averaging',  # Average probabilities
+        'weighted',   # Weight by individual accuracy
+    ])
+    ensemble_trials: int = 5  # Fewer trials since ensembles train multiple elements
+
+    # Training parameters
+    training_config: Dict[str, Any] = field(default_factory=lambda: {
+        'epochs': 1000,
+        'learning_rate': 0.1,
+        'record_every': 50,
+    })
+
+    def get_stacking_configs(self) -> List[Dict[str, Any]]:
+        """Generate all stacking experiment configurations."""
+        configs = []
+        for activation in self.activations:
+            for bottom_depth in self.stacking_bottom_depths:
+                for top_depth in self.stacking_top_depths:
+                    for dataset in self.datasets:
+                        configs.append({
+                            'activation': activation,
+                            'bottom_depth': bottom_depth,
+                            'top_depth': top_depth,
+                            'width': self.width,
+                            'dataset': dataset,
+                        })
+        return configs
+
+    def get_transfer_configs(self) -> List[Dict[str, Any]]:
+        """Generate all transfer experiment configurations."""
+        configs = []
+        for activation in self.activations:
+            for source, target in self.transfer_pairs:
+                for freeze_mode in self.transfer_freeze_modes:
+                    configs.append({
+                        'activation': activation,
+                        'source_dataset': source,
+                        'target_dataset': target,
+                        'freeze_mode': freeze_mode,
+                        'depth': self.transfer_depth,
+                        'width': self.width,
+                    })
+        return configs
+
+    def get_ensemble_configs(self) -> List[Dict[str, Any]]:
+        """Generate all ensemble experiment configurations."""
+        configs = []
+        for activation in self.activations:
+            for ensemble_size in self.ensemble_sizes:
+                for ensemble_type in self.ensemble_types:
+                    for dataset in self.datasets:
+                        configs.append({
+                            'activation': activation,
+                            'ensemble_size': ensemble_size,
+                            'ensemble_type': ensemble_type,
+                            'dataset': dataset,
+                            'depth': self.transfer_depth,  # Use same depth
+                            'width': self.width,
+                        })
+        return configs
+
+    def get_total_experiments(self) -> Dict[str, int]:
+        """Calculate total experiments by type."""
+        stacking = (len(self.activations) * len(self.stacking_bottom_depths) *
+                   len(self.stacking_top_depths) * len(self.datasets) * self.n_trials)
+        transfer = (len(self.activations) * len(self.transfer_pairs) *
+                   len(self.transfer_freeze_modes) * self.n_trials)
+        ensemble = (len(self.activations) * len(self.ensemble_sizes) *
+                   len(self.ensemble_types) * len(self.datasets) * self.ensemble_trials)
+
+        return {
+            'stacking': stacking,
+            'transfer': transfer,
+            'ensemble': ensemble,
+            'total': stacking + transfer + ensemble,
+        }
+
+    def get_summary(self) -> Dict[str, Any]:
+        """Get a summary of the configuration."""
+        totals = self.get_total_experiments()
+        return {
+            'activations': self.activations,
+            'datasets': self.datasets,
+            'width': self.width,
+            'n_trials': self.n_trials,
+            'stacking': {
+                'bottom_depths': self.stacking_bottom_depths,
+                'top_depths': self.stacking_top_depths,
+                'experiments': totals['stacking'],
+            },
+            'transfer': {
+                'pairs': self.transfer_pairs,
+                'freeze_modes': self.transfer_freeze_modes,
+                'depth': self.transfer_depth,
+                'experiments': totals['transfer'],
+            },
+            'ensemble': {
+                'sizes': self.ensemble_sizes,
+                'types': self.ensemble_types,
+                'trials': self.ensemble_trials,
+                'experiments': totals['ensemble'],
+            },
+            'total_experiments': totals['total'],
+            'training_config': self.training_config,
+        }
+
+
 def estimate_runtime(
     n_experiments: int,
     n_workers: int = 8,

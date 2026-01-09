@@ -234,8 +234,11 @@ class Trainer:
         bias_grads: List[np.ndarray],
         lr: float
     ):
-        """Standard SGD update."""
+        """Standard SGD update (respects frozen layers)."""
         for i in range(len(self.element.weights)):
+            # Skip frozen layers
+            if hasattr(self.element, 'frozen_layers') and self.element.frozen_layers[i]:
+                continue
             self.element.weights[i] -= lr * weight_grads[i]
             if self.element.biases[i] is not None:
                 self.element.biases[i] -= lr * bias_grads[i]
@@ -246,10 +249,14 @@ class Trainer:
         bias_grads: List[np.ndarray],
         lr: float
     ):
-        """SGD with momentum update."""
+        """SGD with momentum update (respects frozen layers)."""
         mu = self.config.momentum
 
         for i in range(len(self.element.weights)):
+            # Skip frozen layers
+            if hasattr(self.element, 'frozen_layers') and self.element.frozen_layers[i]:
+                continue
+
             # Update velocities
             self._velocities[i] = mu * self._velocities[i] - lr * weight_grads[i]
 

@@ -50,6 +50,30 @@ class TrainingResult:
     noise_robustness: Optional[Dict[str, float]] = None  # noise_level -> accuracy
     sample_size: Optional[int] = None
 
+    # Phase 8 combination fields (optional for backward compatibility)
+    experiment_type: Optional[str] = None  # 'stacking', 'transfer', 'ensemble'
+
+    # Stacking fields
+    stack_bottom_accuracy: Optional[float] = None
+    stack_bottom_name: Optional[str] = None
+    stack_combined_accuracy: Optional[float] = None
+    stack_improvement: Optional[float] = None  # combined - bottom
+
+    # Transfer fields
+    source_dataset: Optional[str] = None
+    target_dataset: Optional[str] = None
+    pretrained_accuracy: Optional[float] = None
+    scratch_accuracy: Optional[float] = None
+    transfer_benefit: Optional[float] = None  # pretrained - scratch
+    freeze_mode: Optional[str] = None  # 'freeze_all', 'train_all'
+
+    # Ensemble fields
+    ensemble_type: Optional[str] = None  # 'voting', 'averaging', 'weighted'
+    ensemble_size: Optional[int] = None
+    individual_accuracies: Optional[List[float]] = None
+    ensemble_accuracy: Optional[float] = None
+    ensemble_improvement: Optional[float] = None  # ensemble - best_individual
+
 
 class ExperimentStore:
     """

@@ -683,3 +683,395 @@ def phase7_training_worker(args: Tuple) -> Dict:
             pass
 
         return error_info
+
+
+# =============================================================================
+# Phase 8: Combination & Transfer Workers
+# =============================================================================
+
+def phase8_stacking_worker(args: Tuple) -> Dict:
+    """
+    Worker function for Phase 8 stacking experiments.
+
+    Trains a bottom element, freezes it, extracts hidden representations,
+    then trains a top element on those representations.
+
+    Args:
+        args: Tuple of (stacking_config, training_config, experiment_id,
+                       store_path, X, y)
+
+    Returns:
+        Dict with status, experiment_id, and stacking results.
+    """
+    (stacking_config, training_config, experiment_id, store_path, X, y) = args
+
+    try:
+        activation = stacking_config['activation']
+        bottom_depth = stacking_config['bottom_depth']
+        top_depth = stacking_config['top_depth']
+        width = stacking_config['width']
+
+        start_time = time.time()
+
+        # 1. Create and train bottom element
+        bottom_element = NeuralElement(
+            hidden_layers=[width] * bottom_depth,
+            activation=activation,
+            input_dim=X.shape[1],
+            output_dim=1,
+        )
+        config = TrainingConfig(**training_config)
+        trainer = Trainer(bottom_element, config)
+        trainer.train(X, y)
+
+        # Evaluate bottom element
+        bottom_output = bottom_element.forward(X)
+        bottom_acc = float(np.mean((bottom_output > 0.5).astype(int) == y))
+
+        # 2. Freeze bottom element and get hidden representations
+        bottom_element.freeze_all()
+
+        # Get output from last hidden layer (before output layer)
+        # The last hidden layer is at index (bottom_depth - 1) but we want
+        # the representation before the output layer
+        if bottom_depth > 0:
+            hidden_rep = bottom_element.get_layer_output(X, bottom_depth - 1)
+        else:
+            # If no hidden layers, use input directly
+            hidden_rep = X
+
+        # 3. Create and train top element on hidden representations
+        top_element = NeuralElement(
+            hidden_layers=[width] * top_depth,
+            activation=activation,
+            input_dim=hidden_rep.shape[1],
+            output_dim=1,
+        )
+        trainer_top = Trainer(top_element, config)
+        history = trainer_top.train(hidden_rep, y)
+
+        training_time = time.time() - start_time
+
+        # 4. Evaluate combined (stacked) performance
+        # To evaluate stacked: forward through bottom, then through top
+        combined_output = top_element.forward(hidden_rep)
+        combined_acc = float(np.mean((combined_output > 0.5).astype(int) == y))
+        stack_improvement = combined_acc - bottom_acc
+
+        # 5. Store result
+        completed_at = datetime.now().isoformat()
+        element_name = f"stack-{activation[:3]}-{bottom_depth}+{top_depth}x{width}"
+
+        result = TrainingResult(
+            experiment_id=experiment_id,
+            element_name=element_name,
+            weights=[w.tolist() for w in top_element.weights],
+            biases=[b.tolist() if b is not None else None for b in top_element.biases],
+            history=history,
+            final_loss=history['loss'][-1] if history['loss'] else 0.0,
+            final_accuracy=combined_acc,
+            training_time_seconds=training_time,
+            completed_at=completed_at,
+            # Phase 8 fields
+            experiment_type='stacking',
+            stack_bottom_accuracy=bottom_acc,
+            stack_bottom_name=bottom_element.name,
+            stack_combined_accuracy=combined_acc,
+            stack_improvement=stack_improvement,
+        )
+
+        store = ExperimentStore(store_path)
+        store.save_result(result)
+
+        return {
+            'status': 'completed',
+            'experiment_id': experiment_id,
+            'element_name': element_name,
+            'bottom_accuracy': bottom_acc,
+            'combined_accuracy': combined_acc,
+            'stack_improvement': stack_improvement,
+            'training_time': training_time,
+        }
+
+    except Exception as e:
+        error_info = {
+            'status': 'failed',
+            'experiment_id': experiment_id,
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+        }
+
+        try:
+            store = ExperimentStore(store_path)
+            store.update_status(experiment_id, 'failed', str(e))
+        except Exception:
+            pass
+
+        return error_info
+
+
+def phase8_transfer_worker(args: Tuple) -> Dict:
+    """
+    Worker function for Phase 8 transfer learning experiments.
+
+    Trains on source dataset, then fine-tunes or extracts features on target.
+    Also trains from scratch on target as baseline.
+
+    Args:
+        args: Tuple of (transfer_config, training_config, experiment_id,
+                       store_path, datasets_dict)
+
+    Returns:
+        Dict with status, experiment_id, and transfer results.
+    """
+    (transfer_config, training_config, experiment_id, store_path, datasets_dict) = args
+
+    try:
+        activation = transfer_config['activation']
+        source_dataset = transfer_config['source_dataset']
+        target_dataset = transfer_config['target_dataset']
+        freeze_mode = transfer_config['freeze_mode']
+        depth = transfer_config['depth']
+        width = transfer_config['width']
+
+        X_source, y_source = datasets_dict[source_dataset]
+        X_target, y_target = datasets_dict[target_dataset]
+
+        start_time = time.time()
+
+        # 1. Train on source dataset
+        source_element = NeuralElement(
+            hidden_layers=[width] * depth,
+            activation=activation,
+            input_dim=X_source.shape[1],
+            output_dim=1,
+        )
+        config = TrainingConfig(**training_config)
+        trainer = Trainer(source_element, config)
+        trainer.train(X_source, y_source)
+
+        # 2. Create target element with pretrained weights
+        pretrained_element = NeuralElement(
+            hidden_layers=[width] * depth,
+            activation=activation,
+            input_dim=X_target.shape[1],
+            output_dim=1,
+        )
+        # Copy weights from source
+        pretrained_element.load_weights(
+            [w.tolist() for w in source_element.weights],
+            [b.tolist() if b is not None else None for b in source_element.biases]
+        )
+
+        # Apply freeze mode
+        if freeze_mode == 'freeze_all':
+            # Freeze all except output layer
+            for i in range(len(pretrained_element.weights) - 1):
+                pretrained_element.freeze_layer(i)
+
+        # 3. Fine-tune on target
+        trainer_pretrained = Trainer(pretrained_element, config)
+        history = trainer_pretrained.train(X_target, y_target)
+
+        pretrained_output = pretrained_element.forward(X_target)
+        pretrained_acc = float(np.mean((pretrained_output > 0.5).astype(int) == y_target))
+
+        # 4. Train from scratch on target (baseline)
+        scratch_element = NeuralElement(
+            hidden_layers=[width] * depth,
+            activation=activation,
+            input_dim=X_target.shape[1],
+            output_dim=1,
+        )
+        trainer_scratch = Trainer(scratch_element, config)
+        trainer_scratch.train(X_target, y_target)
+
+        scratch_output = scratch_element.forward(X_target)
+        scratch_acc = float(np.mean((scratch_output > 0.5).astype(int) == y_target))
+
+        training_time = time.time() - start_time
+        transfer_benefit = pretrained_acc - scratch_acc
+
+        # 5. Store result
+        completed_at = datetime.now().isoformat()
+        element_name = f"transfer-{activation[:3]}-{source_dataset[:3]}to{target_dataset[:3]}-{freeze_mode}"
+
+        result = TrainingResult(
+            experiment_id=experiment_id,
+            element_name=element_name,
+            weights=[w.tolist() for w in pretrained_element.weights],
+            biases=[b.tolist() if b is not None else None for b in pretrained_element.biases],
+            history=history,
+            final_loss=history['loss'][-1] if history['loss'] else 0.0,
+            final_accuracy=pretrained_acc,
+            training_time_seconds=training_time,
+            completed_at=completed_at,
+            # Phase 8 fields
+            experiment_type='transfer',
+            source_dataset=source_dataset,
+            target_dataset=target_dataset,
+            pretrained_accuracy=pretrained_acc,
+            scratch_accuracy=scratch_acc,
+            transfer_benefit=transfer_benefit,
+            freeze_mode=freeze_mode,
+        )
+
+        store = ExperimentStore(store_path)
+        store.save_result(result)
+
+        return {
+            'status': 'completed',
+            'experiment_id': experiment_id,
+            'element_name': element_name,
+            'pretrained_accuracy': pretrained_acc,
+            'scratch_accuracy': scratch_acc,
+            'transfer_benefit': transfer_benefit,
+            'training_time': training_time,
+        }
+
+    except Exception as e:
+        error_info = {
+            'status': 'failed',
+            'experiment_id': experiment_id,
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+        }
+
+        try:
+            store = ExperimentStore(store_path)
+            store.update_status(experiment_id, 'failed', str(e))
+        except Exception:
+            pass
+
+        return error_info
+
+
+def phase8_ensemble_worker(args: Tuple) -> Dict:
+    """
+    Worker function for Phase 8 ensemble experiments.
+
+    Trains multiple independent elements and combines their predictions.
+
+    Args:
+        args: Tuple of (ensemble_config, training_config, experiment_id,
+                       store_path, X, y)
+
+    Returns:
+        Dict with status, experiment_id, and ensemble results.
+    """
+    (ensemble_config, training_config, experiment_id, store_path, X, y) = args
+
+    try:
+        activation = ensemble_config['activation']
+        ensemble_size = ensemble_config['ensemble_size']
+        ensemble_type = ensemble_config['ensemble_type']
+        depth = ensemble_config['depth']
+        width = ensemble_config['width']
+
+        start_time = time.time()
+
+        # 1. Train ensemble_size independent elements
+        elements = []
+        individual_accs = []
+
+        for i in range(ensemble_size):
+            element = NeuralElement(
+                hidden_layers=[width] * depth,
+                activation=activation,
+                input_dim=X.shape[1],
+                output_dim=1,
+                seed=None,  # Different random init for each
+            )
+            config = TrainingConfig(**training_config)
+            trainer = Trainer(element, config)
+            trainer.train(X, y)
+
+            output = element.forward(X)
+            acc = float(np.mean((output > 0.5).astype(int) == y))
+            individual_accs.append(acc)
+            elements.append(element)
+
+        # 2. Combine predictions based on ensemble_type
+        predictions = np.array([elem.forward(X) for elem in elements])  # (ensemble_size, n_samples, 1)
+
+        if ensemble_type == 'averaging':
+            # Average probabilities
+            ensemble_output = np.mean(predictions, axis=0)
+            ensemble_pred = (ensemble_output > 0.5).astype(int)
+
+        elif ensemble_type == 'voting':
+            # Majority vote
+            individual_preds = (predictions > 0.5).astype(int)
+            ensemble_pred = (np.mean(individual_preds, axis=0) > 0.5).astype(int)
+
+        elif ensemble_type == 'weighted':
+            # Weight by individual accuracy
+            weights = np.array(individual_accs)
+            weights = weights / weights.sum()
+            ensemble_output = np.average(predictions, axis=0, weights=weights)
+            ensemble_pred = (ensemble_output > 0.5).astype(int)
+
+        else:
+            raise ValueError(f"Unknown ensemble_type: {ensemble_type}")
+
+        ensemble_acc = float(np.mean(ensemble_pred == y))
+        best_individual = max(individual_accs)
+        ensemble_improvement = ensemble_acc - best_individual
+
+        training_time = time.time() - start_time
+
+        # 3. Store result (use first element's weights as representative)
+        completed_at = datetime.now().isoformat()
+        element_name = f"ensemble-{activation[:3]}-{ensemble_type}-{ensemble_size}"
+
+        # Get training history from last element
+        history = elements[-1].history
+
+        result = TrainingResult(
+            experiment_id=experiment_id,
+            element_name=element_name,
+            weights=[w.tolist() for w in elements[0].weights],
+            biases=[b.tolist() if b is not None else None for b in elements[0].biases],
+            history=history,
+            final_loss=history['loss'][-1] if history['loss'] else 0.0,
+            final_accuracy=ensemble_acc,
+            training_time_seconds=training_time,
+            completed_at=completed_at,
+            # Phase 8 fields
+            experiment_type='ensemble',
+            ensemble_type=ensemble_type,
+            ensemble_size=ensemble_size,
+            individual_accuracies=individual_accs,
+            ensemble_accuracy=ensemble_acc,
+            ensemble_improvement=ensemble_improvement,
+        )
+
+        store = ExperimentStore(store_path)
+        store.save_result(result)
+
+        return {
+            'status': 'completed',
+            'experiment_id': experiment_id,
+            'element_name': element_name,
+            'individual_accuracies': individual_accs,
+            'ensemble_accuracy': ensemble_acc,
+            'best_individual': best_individual,
+            'ensemble_improvement': ensemble_improvement,
+            'training_time': training_time,
+        }
+
+    except Exception as e:
+        error_info = {
+            'status': 'failed',
+            'experiment_id': experiment_id,
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+        }
+
+        try:
+            store = ExperimentStore(store_path)
+            store.update_status(experiment_id, 'failed', str(e))
+        except Exception:
+            pass
+
+        return error_info
