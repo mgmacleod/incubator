@@ -1,6 +1,6 @@
 # Neural Elements - Scaling Plan
 
-## Current State (Phase 3 Complete)
+## Current State (Phase 4 Complete)
 
 ### Phase 2: Initial Exploration
 **Experiments Run:** 2,316
@@ -34,28 +34,44 @@
 
 ---
 
-## Phase 4: Extended Depth Study
+## Phase 4: Extended Depth Study (COMPLETE)
 
-**Goal:** Find the depth limits for each activation
+**Experiments Run:** 2,560
+**Coverage:**
+- 4 activations: Sigmoid, ReLU, Sine, Tanh
+- 4 depths: 6, 7, 8, 10 hidden layers
+- Fixed width: 8
+- 4 datasets: XOR, moons, circles, spirals
+- 20 trials per configuration
+- 2 variants: baseline + skip connections
 
-**Changes:**
-- Test depths 6, 7, 8, 10 layers
-- Focus on sigmoid (does it hit 0%?) and sine (does it degrade?)
-- Add skip connections variant (ResNet-style)
+**Key Findings:**
 
-**Estimated experiments:** ~2,000
-**New configurations:**
-```python
-# Deep networks
-depths = [6, 7, 8, 10]
-activations = ['sigmoid', 'relu', 'sine', 'tanh']
-width = 8  # Fixed to isolate depth effect
-```
+1. **Sigmoid Collapse Confirmed**
+   - At depth 6+, sigmoid accuracy = ~50% (random chance)
+   - Loss converges to exactly ln(2) = 0.693 (complete gradient death)
 
-**Questions to answer:**
-- At what depth does sigmoid reach random chance (50%)?
-- Does sine ever degrade? What's its limit?
-- Do skip connections rescue sigmoid?
+2. **Skip Connections Rescue Sigmoid**
+   - Depth 6: 50% → 76% (+26%)
+   - Depth 10: 52% → 72% (+20%)
+   - Gradient flows through skip path when transformation path saturates
+
+3. **Sine Remains Stable**
+   - Maintains ~96% accuracy from depth 1 to depth 10
+   - No degradation at extreme depths - exceptional gradient properties
+
+4. **Unexpected: Skip Connections Hurt Good Activations**
+   - ReLU with skip at d=10: 93% → 50% (-43%)
+   - Sine with skip at d=10: 96% → 50% (-46%)
+   - Tanh with skip at d=10: 93% → 88% (-5%)
+   - Skip connections are a *targeted intervention*, not universal improvement
+
+**Deliverables:**
+- `data/phase4_summary.csv` - Aggregated statistics
+- `visualizations/phase4_*.png` - Depth collapse, skip rescue charts
+- `examples/run_phase4_training.py` - Training script
+- `examples/aggregate_phase4.py` - Aggregation script
+- `examples/visualize_phase4.py` - Visualization script
 
 ---
 
@@ -154,12 +170,16 @@ training_config = {
 
 ## Priority Order
 
-1. **Phase 3** - Essential for publication-quality results
-2. **Phase 4** - High scientific interest (depth limits)
+1. ~~**Phase 3** - Essential for publication-quality results~~ ✓ COMPLETE
+2. ~~**Phase 4** - High scientific interest (depth limits)~~ ✓ COMPLETE
 3. **Phase 6** - Unique insights into learning dynamics
 4. **Phase 5** - Architecture exploration
 5. **Phase 7** - Generalization (important but slower)
 6. **Phase 8** - Ambitious, good for follow-up work
+
+**Recommended next:** Phase 6 (Learning Dynamics) or Phase 5 (Architecture Space)
+
+Given Phase 4's surprising skip connection results, Phase 6 could help explain *why* skip connections hurt ReLU/Sine by examining gradient flow statistics.
 
 ---
 

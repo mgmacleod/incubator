@@ -306,6 +306,69 @@ Using pairwise t-tests with Bonferroni correction:
 3. **Leaky ReLU vs ReLU**: Only 0.5% difference, NOT significant (p = 0.86)
 4. **Sine vs ReLU on spirals**: 3.4% difference, NOT significant after correction (p = 0.39)
 
+### Phase 4: Extended Depth Study (2,560 experiments)
+
+Tested extreme depths (6, 7, 8, 10 layers) with and without ResNet-style skip connections.
+
+**Configuration:** 4 activations × 4 depths × 4 datasets × 20 trials × 2 variants (baseline + skip)
+
+#### 1. Sigmoid Collapse Confirmed
+
+Deep sigmoid networks completely collapse to random chance:
+
+| Depth | Accuracy | Notes |
+|-------|----------|-------|
+| 6 | 49.8% | Random chance |
+| 7 | 50.5% | Random chance |
+| 8 | 49.4% | Random chance |
+| 10 | 52.0% | Random chance |
+
+The loss converges to exactly 0.693 (ln(2)), confirming complete gradient death.
+
+#### 2. Skip Connections Rescue Sigmoid
+
+With residual connections, sigmoid improved dramatically:
+
+| Depth | Baseline | With Skip | Improvement |
+|-------|----------|-----------|-------------|
+| 6 | 50% | 76% | **+26%** |
+| 7 | 51% | 73% | **+23%** |
+| 8 | 49% | 75% | **+25%** |
+| 10 | 52% | 72% | **+20%** |
+
+The gradient can flow through the skip path even when the transformation path saturates.
+
+#### 3. Sine Remains Stable at Extreme Depths
+
+Sine activation maintained ~96% accuracy even at depth 10:
+- Depth 6: 96.4%
+- Depth 7: 97.2%
+- Depth 8: 97.2%
+- Depth 10: 96.4%
+
+This confirms sine's exceptional gradient properties - it doesn't suffer from vanishing gradients.
+
+#### 4. Unexpected: Skip Connections Hurt Good Activations
+
+| Activation | Baseline (d=10) | With Skip (d=10) | Change |
+|------------|-----------------|------------------|--------|
+| ReLU | 93% | 50% | **-43%** |
+| Sine | 96% | 50% | **-46%** |
+| Tanh | 93% | 88% | -5% |
+| Sigmoid | 52% | 72% | **+20%** |
+
+Skip connections collapsed ReLU and Sine to random chance at depth 10, while rescuing sigmoid. This suggests:
+- Skip connections can interfere with activations that already have good gradient flow
+- The residual path may dominate and bypass the learned transformations
+- Skip connections are a *targeted intervention* for vanishing gradients, not a universal improvement
+
+#### Key Takeaways
+
+1. **Sigmoid has a hard depth limit of ~5 layers** without architectural modifications
+2. **Skip connections are activation-dependent** - they help sigmoid but hurt ReLU/Sine
+3. **Sine is remarkably stable** - maintains 96%+ accuracy from depth 1 to depth 10
+4. **Tanh degrades gracefully** - slight decline from 94% (d=6) to 93% (d=10)
+
 ### Visualizations
 
 Generated charts are in `visualizations/`:
@@ -322,6 +385,13 @@ Generated charts are in `visualizations/`:
 - `phase3_dataset_comparison_ci.png` - Per-dataset with CI
 - `phase3_variance_reliability.png` - Accuracy vs reliability scatter
 - `phase3_activation_boxplots.png` - Distribution box plots
+
+**Phase 4 (extended depth + skip connections):**
+- `phase4_sigmoid_collapse.png` - Sigmoid baseline vs skip at depths 6-10
+- `phase4_sine_stability.png` - All activations at extreme depths
+- `phase4_skip_rescue.png` - Skip connection effect by activation (2x2 grid)
+- `phase4_combined_depths.png` - Full depth range (Phase 3 + 4 combined)
+- `phase4_depth_collapse.png` - Extended depth degradation curves
 
 **Reports:**
 - `reports/phase3_statistical_summary.md` - Full statistical report
