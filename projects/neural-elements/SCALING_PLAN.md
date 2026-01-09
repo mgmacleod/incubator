@@ -277,14 +277,62 @@
 
 ---
 
-## Phase 8: Combination & Transfer
+## Phase 8: Combination & Transfer (COMPLETE)
 
 **Goal:** Test if element properties are composable
 
-**Experiments:**
-- **Stacking:** Train element A, freeze, add element B on top
-- **Transfer:** Train on dataset X, test on dataset Y
-- **Ensembles:** Combine predictions from multiple elements
+**Experiments Run:** ~2,000
+**Coverage:**
+- Stacking: 4 activations × 2 bottom depths × 2 top depths × 4 datasets × 20 trials
+- Transfer: 4 activations × 4 source-target pairs × 2 freeze modes × 20 trials
+- Ensembles: 4 activations × 3 sizes × 3 types × 4 datasets × 5 trials
+
+**Key Findings:**
+
+1. **Stacking Benefits Good Activations**
+
+   | Activation | Avg Improvement |
+   |------------|-----------------|
+   | Tanh | +2.9% |
+   | ReLU | +2.9% |
+   | Sine | +2.3% |
+   | Sigmoid | **-5.9%** |
+
+   Stacking helps ReLU/Tanh/Sine but destroys Sigmoid (especially shallow bottoms: -14% to -23%).
+
+2. **Transfer is Asymmetric**
+
+   | Transfer Pair | Best Benefit |
+   |---------------|--------------|
+   | Tanh circles→spirals | **+13.6%** |
+   | Sine circles→spirals | +10.7% |
+   | Sigmoid moons→xor | +9.7% |
+   | ReLU circles→spirals | +6.1% |
+
+   circles→spirals transfers well, most other directions hurt performance.
+   Freezing layers (feature extraction) performs worse than full fine-tuning.
+
+3. **Ensembles Don't Help**
+
+   | Ensemble Type | Avg Improvement |
+   |---------------|-----------------|
+   | Weighted | -0.8% |
+   | Averaging | -0.8% |
+   | Voting | -1.0% |
+
+   Best individual element already captures the solution at this scale.
+
+**Deliverables:**
+- `data/phase8_stacking.csv` - Stacking aggregated results
+- `data/phase8_transfer.csv` - Transfer aggregated results
+- `data/phase8_ensemble.csv` - Ensemble aggregated results
+- `visualizations/phase8_stacking_heatmap.png`
+- `visualizations/phase8_transfer_matrix.png`
+- `visualizations/phase8_ensemble_scaling.png`
+- `visualizations/phase8_composition_summary.png`
+- `examples/run_phase8_training.py` - Training script
+- `examples/aggregate_phase8.py` - Aggregation script
+- `examples/visualize_phase8.py` - Visualization script
 
 ---
 
@@ -311,10 +359,10 @@
 2. ~~**Phase 4** - High scientific interest (depth limits)~~ ✓ COMPLETE
 3. ~~**Phase 5** - Architecture exploration~~ ✓ COMPLETE
 4. ~~**Phase 6** - Unique insights into learning dynamics~~ ✓ COMPLETE
-5. **Phase 7** - Generalization study ✓ READY TO RUN
-6. **Phase 8** - Ambitious, good for follow-up work
+5. ~~**Phase 7** - Generalization study~~ ✓ COMPLETE
+6. ~~**Phase 8** - Combination & transfer~~ ✓ COMPLETE
 
-**Recommended next:** Run Phase 7 with `python examples/run_phase7_training.py`
+**All phases complete!** Total experiments run: ~17,000+
 
 Phase 6 successfully explained:
 - ✓ Why skip connections hurt ReLU/Sine (gradient interference) but help Sigmoid (rescues vanishing gradients)

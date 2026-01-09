@@ -536,6 +536,54 @@ All activations show minimal noise sensitivity (~0.4% drop at max noise level 0.
 3. **Good activations are sample-efficient** - ReLU/Sine/Tanh maintain accuracy at n=50
 4. **All activations are noise-robust** - minimal degradation with test-time noise
 
+### Phase 8: Combination & Transfer (~2,000 experiments)
+
+Tested whether neural element properties are **composable** through stacking, transfer learning, and ensembles.
+
+**Configuration:**
+- Stacking: 4 activations × 2 bottom depths × 2 top depths × 4 datasets × 20 trials
+- Transfer: 4 activations × 4 source-target pairs × 2 freeze modes × 20 trials
+- Ensembles: 4 activations × 3 sizes × 3 types × 4 datasets × 5 trials
+
+#### 1. Stacking Results
+
+| Activation | Avg Improvement |
+|------------|-----------------|
+| Tanh | +2.9% |
+| ReLU | +2.9% |
+| Sine | +2.3% |
+| Sigmoid | **-5.9%** |
+
+Stacking helps ReLU/Tanh/Sine but severely hurts Sigmoid (especially with shallow bottoms: -14% to -23%).
+
+#### 2. Transfer Learning Results
+
+| Transfer Pair | Best Benefit |
+|---------------|--------------|
+| Tanh circles→spirals | **+13.6%** |
+| Sine circles→spirals | +10.7% |
+| Sigmoid moons→xor | +9.7% |
+| ReLU circles→spirals | +6.1% |
+
+Transfer is asymmetric - circles→spirals helps significantly, but most other transfers hurt performance. Freezing layers (feature extraction) generally performs worse than full fine-tuning.
+
+#### 3. Ensemble Results
+
+| Ensemble Type | Avg Improvement |
+|---------------|-----------------|
+| Weighted | -0.8% |
+| Averaging | -0.8% |
+| Voting | -1.0% |
+
+Ensembles provide no benefit at this scale - the best individual element already captures the solution. Larger ensembles actually perform slightly worse.
+
+#### Key Takeaways
+
+1. **Stacking works for good activations** - ReLU/Tanh/Sine gain ~3%, but sigmoid loses ~6%
+2. **Transfer is highly asymmetric** - circles→spirals helps (+10-14%), most others hurt
+3. **Ensembles don't help** at this scale - best individual is sufficient
+4. **Sigmoid fails at composition** - stacking destroys its already poor representations
+
 ### Visualizations
 
 Generated charts are in `visualizations/`:
@@ -582,6 +630,12 @@ Generated charts are in `visualizations/`:
 - `phase7_train_test_scatter.png` - Train vs test accuracy (overfitting detection)
 - `phase7_dataset_comparison.png` - Generalization gap by dataset
 - `phase7_gap_vs_sample_size.png` - How gap changes with more data
+
+**Phase 8 (combination & transfer):**
+- `phase8_stacking_heatmap.png` - Stacking improvement by bottom × top depth
+- `phase8_transfer_matrix.png` - Transfer benefit by source → target dataset
+- `phase8_ensemble_scaling.png` - Ensemble size vs improvement
+- `phase8_composition_summary.png` - Combined comparison across all three methods
 
 **Reports:**
 - `reports/phase3_statistical_summary.md` - Full statistical report
