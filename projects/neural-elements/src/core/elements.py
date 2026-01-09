@@ -93,18 +93,15 @@ class NeuralElement:
             skip_connections=skip_connections
         )
 
-        # Generate name if not provided
-        if name is None:
-            act_short = activation[:3].upper()
-            depth = len(hidden_layers)
-            width = hidden_layers[0] if hidden_layers else 0
-            skip_suffix = "-skip" if skip_connections else ""
-            self.name = f"{act_short}-{depth}x{width}{skip_suffix}"
-        else:
-            self.name = name
-
+        # Store activation function first (needed for get_element_name)
         self.activation_fn = get_activation(activation)
         self.seed = seed
+
+        # Generate name if not provided
+        if name is None:
+            self.name = self.get_element_name()
+        else:
+            self.name = name
 
         # Initialize weights
         self._init_weights()
@@ -354,6 +351,30 @@ class NeuralElement:
             'yy': yy.tolist(),
             'probs': probs.tolist()
         }
+
+    def get_element_name(self) -> str:
+        """
+        Generate a descriptive name for this element.
+
+        Handles both uniform and non-uniform architectures:
+        - Uniform [8, 8, 8]: "rel-3x8" (activation-depthxwidth)
+        - Non-uniform [32, 8, 32]: "rel-32_8_32" (activation-widths joined by _)
+        - With skip connections: append "-skip"
+        """
+        activation = self.config.activation[:3].lower()
+        skip_suffix = "-skip" if self.config.skip_connections else ""
+
+        if self.config.width_pattern == 'uniform' and self.config.hidden_layers:
+            # Original format for uniform architectures: rel-3x8
+            width = self.config.hidden_layers[0]
+            return f"{activation}-{self.config.depth}x{width}{skip_suffix}"
+        elif self.config.hidden_layers:
+            # New format for non-uniform: rel-32_8_32
+            widths = '_'.join(str(w) for w in self.config.hidden_layers)
+            return f"{activation}-{widths}{skip_suffix}"
+        else:
+            # Linear (no hidden layers)
+            return f"{activation}-linear{skip_suffix}"
 
     def reset(self):
         """Reset the element to initial state."""

@@ -1,6 +1,6 @@
 # Neural Elements - Scaling Plan
 
-## Current State (Phase 4 Complete)
+## Current State (Phase 5 Complete)
 
 ### Phase 2: Initial Exploration
 **Experiments Run:** 2,316
@@ -75,28 +75,75 @@
 
 ---
 
-## Phase 5: Architecture Space Exploration
+## Phase 5: Architecture Space Exploration (COMPLETE)
 
-**Goal:** Test non-uniform architectures systematically
+**Experiments Run:** 3,520
+**Coverage:**
+- 11 architectures: bottleneck, pyramid, parameter-matched variants
+- 4 activations: ReLU, Sine, Tanh, Leaky ReLU
+- 4 datasets: XOR, moons, circles, spirals
+- 20 trials per configuration
 
-**New configurations:**
+**Architectures Tested:**
 ```python
-# Bottleneck architectures
-{'hidden_layers': [32, 8, 32]},     # Severe bottleneck
-{'hidden_layers': [16, 4, 16]},     # Moderate bottleneck
-{'hidden_layers': [8, 2, 8]},       # Extreme bottleneck
+# Bottleneck patterns
+[32, 8, 32]      # Severe bottleneck
+[16, 4, 16]      # Moderate bottleneck
+[8, 2, 8]        # Extreme bottleneck
 
-# Pyramid architectures
-{'hidden_layers': [4, 8, 16]},      # Expanding
-{'hidden_layers': [16, 8, 4]},      # Contracting
-{'hidden_layers': [4, 8, 16, 8, 4]}, # Diamond
+# Pyramid patterns
+[4, 8, 16]       # Expanding
+[16, 8, 4]       # Contracting
+[4, 8, 16, 8, 4] # Diamond
 
-# Wide-shallow vs narrow-deep (same params)
-{'hidden_layers': [64]},            # 1 layer, 64 wide (~200 params)
-{'hidden_layers': [8, 8, 8]},       # 3 layers, 8 wide (~200 params)
+# Parameter-matched (~150-200 params)
+[32]             # Wide-shallow
+[12, 12]         # Medium balanced
+[8, 8, 8]        # Narrow-deep
+
+# Uniform baselines
+[8, 8, 8]        # 3-layer uniform
+[8, 8, 8, 8, 8]  # 5-layer uniform
 ```
 
-**Estimated experiments:** ~2,500
+**Key Findings:**
+
+1. **Bottleneck Survival**
+   - `[32, 8, 32]` (severe): 93.9% - 8-neuron bottleneck is viable
+   - `[16, 4, 16]` (moderate): 92.0% - 4-neuron bottleneck works
+   - `[8, 2, 8]` (extreme): 85.6% - Width-2 bottleneck degrades performance
+   - Confirms Phase 3: width=2 is the critical threshold
+
+2. **Pyramid Direction Doesn't Matter**
+   - Expanding `[4, 8, 16]`: 92.0%
+   - Contracting `[16, 8, 4]`: 92.0%
+   - Diamond `[4, 8, 16, 8, 4]`: 91.2%
+   - No significant difference between pyramid patterns
+
+3. **Parameter Efficiency: Depth > Width**
+   - Wide-shallow `[32]` (~97 params): 84.4%
+   - Medium `[12, 12]` (~193 params): 89.6%
+   - Narrow-deep `[8, 8, 8]` (~169 params): 85.6%
+   - Adding depth helps more than adding width for similar parameter budgets
+
+4. **Activation × Architecture Interactions**
+   - ReLU/Leaky ReLU: 92-96% across all architectures
+   - Sine: Stable ~92% but struggles with wide-shallow (78%)
+   - Sigmoid: Fails (~61%) across all depth-3+ architectures
+   - Wide-shallow architectures hurt periodic activations most
+
+5. **Activation Ranking (Phase 5)**
+   1. ReLU: 91.9%
+   2. Leaky ReLU: 91.6%
+   3. Sine: 88.9%
+   4. Tanh: 88.2%
+
+**Deliverables:**
+- `data/phase5_summary.csv` - Aggregated statistics
+- `visualizations/phase5_*.png` - Bottleneck survival, pyramid comparison, parameter efficiency, architecture heatmap
+- `examples/run_phase5_training.py` - Training script
+- `examples/aggregate_phase5.py` - Aggregation script
+- `examples/visualize_phase5.py` - Visualization script
 
 ---
 
@@ -172,14 +219,17 @@ training_config = {
 
 1. ~~**Phase 3** - Essential for publication-quality results~~ ✓ COMPLETE
 2. ~~**Phase 4** - High scientific interest (depth limits)~~ ✓ COMPLETE
-3. **Phase 6** - Unique insights into learning dynamics
-4. **Phase 5** - Architecture exploration
+3. ~~**Phase 5** - Architecture exploration~~ ✓ COMPLETE
+4. **Phase 6** - Unique insights into learning dynamics
 5. **Phase 7** - Generalization (important but slower)
 6. **Phase 8** - Ambitious, good for follow-up work
 
-**Recommended next:** Phase 6 (Learning Dynamics) or Phase 5 (Architecture Space)
+**Recommended next:** Phase 6 (Learning Dynamics)
 
-Given Phase 4's surprising skip connection results, Phase 6 could help explain *why* skip connections hurt ReLU/Sine by examining gradient flow statistics.
+Phase 6 could help explain:
+- Why skip connections hurt ReLU/Sine (Phase 4 finding)
+- Why wide-shallow architectures hurt Sine (Phase 5 finding)
+- The gradient flow differences between activations
 
 ---
 

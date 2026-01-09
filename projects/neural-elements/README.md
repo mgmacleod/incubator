@@ -369,6 +369,59 @@ Skip connections collapsed ReLU and Sine to random chance at depth 10, while res
 3. **Sine is remarkably stable** - maintains 96%+ accuracy from depth 1 to depth 10
 4. **Tanh degrades gracefully** - slight decline from 94% (d=6) to 93% (d=10)
 
+### Phase 5: Architecture Space Exploration (3,520 experiments)
+
+Tested non-uniform architectures including bottlenecks, pyramids, and parameter-matched configurations.
+
+**Configuration:** 11 architectures × 4 activations × 4 datasets × 20 trials
+
+#### 1. Bottleneck Architecture Survival
+
+| Architecture | Pattern | Accuracy | Notes |
+|--------------|---------|----------|-------|
+| `[32, 8, 32]` | Severe bottleneck | 93.9% | 8-neuron bottleneck works |
+| `[16, 4, 16]` | Moderate bottleneck | 92.0% | 4-neuron bottleneck works |
+| `[8, 2, 8]` | Extreme bottleneck | 85.6% | Width-2 degrades (~7% loss) |
+
+**Key insight:** Bottleneck width of 4+ neurons is sufficient. Width-2 bottlenecks degrade but don't collapse completely (unlike uniform width-2 networks).
+
+#### 2. Pyramid Direction Doesn't Matter
+
+| Pattern | Architecture | Accuracy |
+|---------|--------------|----------|
+| Expanding | `[4, 8, 16]` | 92.0% |
+| Contracting | `[16, 8, 4]` | 92.0% |
+| Diamond | `[4, 8, 16, 8, 4]` | 91.2% |
+
+All pyramid patterns perform identically - **direction has no effect** on these toy datasets.
+
+#### 3. Parameter Efficiency: Depth > Width
+
+For similar parameter budgets (~150-200 params):
+
+| Architecture | Params | Accuracy |
+|--------------|--------|----------|
+| Wide-shallow `[32]` | ~97 | 84.4% |
+| Medium `[12, 12]` | ~193 | **89.6%** |
+| Narrow-deep `[8, 8, 8]` | ~169 | 85.6% |
+
+**Key insight:** Adding layers beats adding width for similar parameter counts. But the medium balanced configuration wins overall.
+
+#### 4. Activation × Architecture Interactions
+
+The architecture heatmap reveals:
+- **ReLU/Leaky ReLU**: 92-96% across all architectures
+- **Sine**: Stable ~92% but drops to 78% on wide-shallow `[32]`
+- **Sigmoid**: ~61% failure across all depth-3+ architectures
+- **Wide-shallow hurts periodic activations**: Sine drops 14% on `[32]` vs other architectures
+
+#### Key Takeaways
+
+1. **Width-2 is the critical bottleneck threshold** - confirmed across bottleneck and uniform architectures
+2. **Pyramid direction is irrelevant** - expanding, contracting, diamond all equivalent
+3. **Medium balanced architectures are optimal** for parameter efficiency
+4. **Wide-shallow networks hurt Sine** - periodic activations need depth to express their oscillations
+
 ### Visualizations
 
 Generated charts are in `visualizations/`:
@@ -392,6 +445,13 @@ Generated charts are in `visualizations/`:
 - `phase4_skip_rescue.png` - Skip connection effect by activation (2x2 grid)
 - `phase4_combined_depths.png` - Full depth range (Phase 3 + 4 combined)
 - `phase4_depth_collapse.png` - Extended depth degradation curves
+
+**Phase 5 (architecture space exploration):**
+- `phase5_bottleneck_survival.png` - Which bottleneck widths can still learn
+- `phase5_pyramid_comparison.png` - Expanding vs contracting vs diamond
+- `phase5_parameter_efficiency.png` - Accuracy per parameter count
+- `phase5_architecture_heatmap.png` - Pattern × activation performance grid
+- `phase5_dataset_comparison.png` - Best architecture by dataset
 
 **Reports:**
 - `reports/phase3_statistical_summary.md` - Full statistical report

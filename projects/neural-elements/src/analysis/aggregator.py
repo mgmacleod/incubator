@@ -209,23 +209,42 @@ def aggregate_experiments(
 
 def _parse_element_name(element_name: str) -> Optional[Dict[str, Any]]:
     """
-    Parse an element name into activation, depth, width, skip_connections.
+    Parse an element name into activation, depth, width, hidden_layers, skip_connections.
 
     Handles formats like:
-    - "relu-3x8" -> {'activation': 'relu', 'depth': 3, 'width': 8, 'skip_connections': False}
-    - "leaky_relu-2x4" -> {'activation': 'leaky_relu', 'depth': 2, 'width': 4, 'skip_connections': False}
-    - "relu-3x8-skip" -> {'activation': 'relu', 'depth': 3, 'width': 8, 'skip_connections': True}
+    - Uniform: "relu-3x8" -> {'activation': 'relu', 'depth': 3, 'width': 8, 'hidden_layers': [8, 8, 8], ...}
+    - Uniform: "leaky_relu-2x4" -> {'activation': 'leaky_relu', 'depth': 2, 'width': 4, ...}
+    - Uniform with skip: "relu-3x8-skip" -> {'activation': 'relu', ..., 'skip_connections': True}
+    - Non-uniform: "rel-32_8_32" -> {'activation': 'rel', 'depth': 3, 'width': 32, 'hidden_layers': [32, 8, 32], ...}
+    - Non-uniform with skip: "sin-4_8_16-skip" -> {..., 'skip_connections': True}
     """
-    # Pattern: activation-depthxwidth[-skip]
+    # Try uniform format first: activation-depthxwidth[-skip]
     # Activation can contain underscores (leaky_relu)
     match = re.match(r'^(.+?)-(\d+)x(\d+)(-skip)?$', element_name)
     if match:
+        depth = int(match.group(2))
+        width = int(match.group(3))
         return {
             'activation': match.group(1).lower(),
-            'depth': int(match.group(2)),
-            'width': int(match.group(3)),
+            'depth': depth,
+            'width': width,
+            'hidden_layers': [width] * depth,
             'skip_connections': match.group(4) is not None,
         }
+
+    # Try non-uniform format: activation-w1_w2_w3[-skip]
+    # e.g., "rel-32_8_32" or "sin-4_8_16-skip"
+    match = re.match(r'^(.+?)-(\d+(?:_\d+)+)(-skip)?$', element_name)
+    if match:
+        widths = [int(w) for w in match.group(2).split('_')]
+        return {
+            'activation': match.group(1).lower(),
+            'depth': len(widths),
+            'width': max(widths),  # Use max width for grouping
+            'hidden_layers': widths,
+            'skip_connections': match.group(3) is not None,
+        }
+
     return None
 
 

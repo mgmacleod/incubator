@@ -226,6 +226,96 @@ class Phase4Config:
         }
 
 
+@dataclass
+class Phase5Config:
+    """
+    Configuration for Phase 5: Architecture Space Exploration.
+
+    Tests non-uniform architectures to understand how width patterns affect learning:
+    - Bottleneck architectures (info must pass through narrow layer)
+    - Pyramid architectures (expanding, contracting, diamond)
+    - Parameter-matched comparisons (same params, different shapes)
+
+    Total: ~11 architectures × 4 activations × 4 datasets × 20 trials = ~3,520 experiments
+    """
+
+    # Non-uniform architectures organized by pattern type
+    architectures: Dict[str, List[int]] = field(default_factory=lambda: {
+        # Bottleneck patterns - info passes through narrow layer
+        'bottleneck_severe': [32, 8, 32],
+        'bottleneck_moderate': [16, 4, 16],
+        'bottleneck_extreme': [8, 2, 8],
+
+        # Pyramid patterns - width changes monotonically
+        'pyramid_expanding': [4, 8, 16],
+        'pyramid_contracting': [16, 8, 4],
+        'pyramid_diamond': [4, 8, 16, 8, 4],
+
+        # Parameter-matched comparisons (~150-200 params)
+        'wide_shallow': [32],
+        'medium_balanced': [12, 12],
+        'narrow_deep': [8, 8, 8],
+
+        # Uniform baselines for comparison
+        'uniform_d3': [8, 8, 8],
+        'uniform_d5': [8, 8, 8, 8, 8],
+    })
+
+    # Best activations from Phase 3/4 (excluding sigmoid which collapses)
+    activations: List[str] = field(default_factory=lambda: [
+        'relu',
+        'sine',
+        'tanh',
+        'leaky_relu',
+    ])
+
+    # Datasets
+    datasets: List[str] = field(default_factory=lambda: [
+        'xor',
+        'moons',
+        'circles',
+        'spirals',
+    ])
+
+    # Number of trials for statistical robustness
+    n_trials: int = 20
+
+    # Training parameters
+    training_config: Dict[str, Any] = field(default_factory=lambda: {
+        'epochs': 500,
+        'learning_rate': 0.1,
+        'record_every': 50,
+    })
+
+    def get_element_configs(self) -> List[Dict[str, Any]]:
+        """Generate all element configurations for Phase 5."""
+        configs = []
+        for pattern_name, hidden_layers in self.architectures.items():
+            for activation in self.activations:
+                configs.append({
+                    'hidden_layers': hidden_layers,
+                    'activation': activation,
+                })
+        return configs
+
+    def get_total_experiments(self) -> int:
+        """Calculate total number of experiments."""
+        n_configs = len(self.architectures) * len(self.activations)
+        return n_configs * len(self.datasets) * self.n_trials
+
+    def get_summary(self) -> Dict[str, Any]:
+        """Get a summary of the configuration."""
+        return {
+            'architectures': self.architectures,
+            'activations': self.activations,
+            'datasets': self.datasets,
+            'n_trials': self.n_trials,
+            'n_element_configs': len(self.architectures) * len(self.activations),
+            'total_experiments': self.get_total_experiments(),
+            'training_config': self.training_config,
+        }
+
+
 def estimate_runtime(
     n_experiments: int,
     n_workers: int = 8,
