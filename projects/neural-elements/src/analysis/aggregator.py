@@ -27,11 +27,6 @@ class ConfigurationStats:
     width: int
     dataset: str
 
-    # Trial counts
-    n_trials: int
-    n_completed: int
-    n_failed: int
-
     # Accuracy statistics
     mean_accuracy: float
     std_accuracy: float
@@ -47,7 +42,13 @@ class ConfigurationStats:
     # Training time
     mean_training_time: float
 
-    # Metadata
+    # Trial counts (with defaults)
+    n_trials: int = 0
+    n_completed: int = 0
+    n_failed: int = 0
+
+    # Optional fields with defaults
+    skip_connections: bool = False
     confidence_level: float = 0.95
     experiment_ids: List[str] = field(default_factory=list)
 
@@ -85,8 +86,8 @@ def aggregate_experiments(
         element_name = exp.get('element_name', '')
         dataset = exp.get('dataset', '')
 
-        # Extract activation, depth, width from element name
-        # Format is typically: "ACTIVATION-DxW" like "relu-3x8"
+        # Extract activation, depth, width, skip_connections from element name
+        # Format is typically: "ACTIVATION-DxW" or "ACTIVATION-DxW-skip"
         config = _parse_element_name(element_name)
         if config is None:
             continue
@@ -94,9 +95,10 @@ def aggregate_experiments(
         activation = config['activation']
         depth = config['depth']
         width = config['width']
+        skip_connections = config.get('skip_connections', False)
 
         # Create config key
-        config_key = get_config_key(activation, depth, width, dataset)
+        config_key = get_config_key(activation, depth, width, dataset, skip_connections)
 
         if config_key not in grouped:
             grouped[config_key] = {
@@ -104,6 +106,7 @@ def aggregate_experiments(
                 'depth': depth,
                 'width': width,
                 'dataset': dataset,
+                'skip_connections': skip_connections,
                 'accuracies': [],
                 'losses': [],
                 'training_times': [],
@@ -138,8 +141,9 @@ def aggregate_experiments(
             config = _parse_element_name(element_name)
             if config is None:
                 continue
+            skip_connections = config.get('skip_connections', False)
             config_key = get_config_key(
-                config['activation'], config['depth'], config['width'], dataset
+                config['activation'], config['depth'], config['width'], dataset, skip_connections
             )
             if config_key in grouped:
                 grouped[config_key]['n_failed'] += 1
@@ -179,9 +183,6 @@ def aggregate_experiments(
             depth=data['depth'],
             width=data['width'],
             dataset=data['dataset'],
-            n_trials=len(data['experiment_ids']),
-            n_completed=len(accuracies),
-            n_failed=data['n_failed'],
             mean_accuracy=mean_accuracy,
             std_accuracy=std_accuracy,
             ci_lower=ci_lower,
@@ -191,33 +192,39 @@ def aggregate_experiments(
             mean_loss=mean_loss,
             std_loss=std_loss,
             mean_training_time=mean_training_time,
+            n_trials=len(data['experiment_ids']),
+            n_completed=len(accuracies),
+            n_failed=data['n_failed'],
+            skip_connections=data.get('skip_connections', False),
             confidence_level=confidence,
             experiment_ids=data['experiment_ids'],
         )
         results.append(stats)
 
-    # Sort by activation, depth, dataset for consistent ordering
-    results.sort(key=lambda s: (s.activation, s.depth, s.dataset))
+    # Sort by activation, depth, skip_connections, dataset for consistent ordering
+    results.sort(key=lambda s: (s.activation, s.depth, s.skip_connections, s.dataset))
 
     return results
 
 
 def _parse_element_name(element_name: str) -> Optional[Dict[str, Any]]:
     """
-    Parse an element name into activation, depth, width.
+    Parse an element name into activation, depth, width, skip_connections.
 
     Handles formats like:
-    - "relu-3x8" -> {'activation': 'relu', 'depth': 3, 'width': 8}
-    - "leaky_relu-2x4" -> {'activation': 'leaky_relu', 'depth': 2, 'width': 4}
+    - "relu-3x8" -> {'activation': 'relu', 'depth': 3, 'width': 8, 'skip_connections': False}
+    - "leaky_relu-2x4" -> {'activation': 'leaky_relu', 'depth': 2, 'width': 4, 'skip_connections': False}
+    - "relu-3x8-skip" -> {'activation': 'relu', 'depth': 3, 'width': 8, 'skip_connections': True}
     """
-    # Pattern: activation-depthxwidth
+    # Pattern: activation-depthxwidth[-skip]
     # Activation can contain underscores (leaky_relu)
-    match = re.match(r'^(.+?)-(\d+)x(\d+)$', element_name)
+    match = re.match(r'^(.+?)-(\d+)x(\d+)(-skip)?$', element_name)
     if match:
         return {
             'activation': match.group(1).lower(),
             'depth': int(match.group(2)),
             'width': int(match.group(3)),
+            'skip_connections': match.group(4) is not None,
         }
     return None
 
@@ -240,7 +247,7 @@ def export_to_csv(
 
     # Define columns
     columns = [
-        'config_key', 'activation', 'depth', 'width', 'dataset',
+        'config_key', 'activation', 'depth', 'width', 'dataset', 'skip_connections',
         'n_trials', 'n_completed', 'n_failed',
         'mean_accuracy', 'std_accuracy', 'ci_lower', 'ci_upper',
         'min_accuracy', 'max_accuracy',
@@ -282,15 +289,16 @@ def load_from_csv(filepath: str) -> List[ConfigurationStats]:
             # Convert types
             experiment_ids = row.get('experiment_ids', '').split(';') if row.get('experiment_ids') else []
 
+            # Handle skip_connections - may be missing in old CSVs
+            skip_str = row.get('skip_connections', 'False')
+            skip_connections = skip_str.lower() in ('true', '1', 'yes')
+
             stat = ConfigurationStats(
                 config_key=row['config_key'],
                 activation=row['activation'],
                 depth=int(row['depth']),
                 width=int(row['width']),
                 dataset=row['dataset'],
-                n_trials=int(row['n_trials']),
-                n_completed=int(row['n_completed']),
-                n_failed=int(row['n_failed']),
                 mean_accuracy=float(row['mean_accuracy']),
                 std_accuracy=float(row['std_accuracy']),
                 ci_lower=float(row['ci_lower']),
@@ -300,6 +308,10 @@ def load_from_csv(filepath: str) -> List[ConfigurationStats]:
                 mean_loss=float(row['mean_loss']),
                 std_loss=float(row['std_loss']),
                 mean_training_time=float(row['mean_training_time']),
+                n_trials=int(row['n_trials']),
+                n_completed=int(row['n_completed']),
+                n_failed=int(row['n_failed']),
+                skip_connections=skip_connections,
                 confidence_level=float(row['confidence_level']),
                 experiment_ids=experiment_ids,
             )

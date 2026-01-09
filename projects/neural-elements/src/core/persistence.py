@@ -75,16 +75,28 @@ class ExperimentStore:
         return FileLock(str(file_path) + '.lock')
 
     def _read_index(self) -> Dict:
-        """Read the index file."""
-        with self._get_lock(self.index_file):
-            if self.index_file.exists():
-                return json.loads(self.index_file.read_text())
-            return {'version': '1.0', 'experiments': {}}
+        """Read the index file (caller should hold lock for read-modify-write)."""
+        if self.index_file.exists():
+            return json.loads(self.index_file.read_text())
+        return {'version': '1.0', 'experiments': {}}
 
     def _write_index(self, index: Dict):
-        """Write the index file atomically."""
+        """Write the index file (caller should hold lock for read-modify-write)."""
+        self.index_file.write_text(json.dumps(index, indent=2))
+
+    def _update_index_entry(self, experiment_id: str, updates: Dict):
+        """Atomically update a single experiment entry in the index.
+
+        This method holds the lock for the entire read-modify-write cycle
+        to prevent race conditions in multiprocessing.
+        """
         with self._get_lock(self.index_file):
-            self.index_file.write_text(json.dumps(index, indent=2))
+            index = self._read_index()
+            if experiment_id in index['experiments']:
+                index['experiments'][experiment_id].update(updates)
+            else:
+                index['experiments'][experiment_id] = updates
+            self._write_index(index)
 
     def generate_experiment_id(self) -> str:
         """Generate a unique experiment ID."""
@@ -104,16 +116,15 @@ class ExperimentStore:
         metadata_file = exp_dir / 'metadata.json'
         metadata_file.write_text(json.dumps(asdict(metadata), indent=2))
 
-        # Update index
-        index = self._read_index()
-        index['experiments'][metadata.experiment_id] = {
+        # Update index atomically to avoid race conditions in multiprocessing
+        self._update_index_entry(metadata.experiment_id, {
+            'experiment_id': metadata.experiment_id,
             'element_name': metadata.element_name,
             'dataset': metadata.dataset_name,
             'status': metadata.status,
             'created_at': metadata.created_at,
             'job_id': metadata.job_id,
-        }
-        self._write_index(index)
+        })
 
     def save_result(self, result: TrainingResult):
         """Save training result (weights, biases, history)."""
@@ -131,16 +142,13 @@ class ExperimentStore:
             metadata['completed_at'] = result.completed_at
             metadata_file.write_text(json.dumps(metadata, indent=2))
 
-        # Update index with results summary
-        index = self._read_index()
-        if result.experiment_id in index['experiments']:
-            index['experiments'][result.experiment_id].update({
-                'status': 'completed',
-                'final_accuracy': result.final_accuracy,
-                'final_loss': result.final_loss,
-                'training_time': result.training_time_seconds,
-            })
-            self._write_index(index)
+        # Update index atomically to avoid race conditions in multiprocessing
+        self._update_index_entry(result.experiment_id, {
+            'status': 'completed',
+            'final_accuracy': result.final_accuracy,
+            'final_loss': result.final_loss,
+            'training_time': result.training_time_seconds,
+        })
 
     def update_status(self, experiment_id: str, status: str, error: Optional[str] = None):
         """Update experiment status."""
@@ -156,11 +164,8 @@ class ExperimentStore:
                 metadata['completed_at'] = datetime.now().isoformat()
             metadata_file.write_text(json.dumps(metadata, indent=2))
 
-        # Update index
-        index = self._read_index()
-        if experiment_id in index['experiments']:
-            index['experiments'][experiment_id]['status'] = status
-            self._write_index(index)
+        # Update index atomically to avoid race conditions in multiprocessing
+        self._update_index_entry(experiment_id, {'status': status})
 
     def load_metadata(self, experiment_id: str) -> Optional[ExperimentMetadata]:
         """Load experiment metadata."""

@@ -24,6 +24,7 @@ class ElementConfig:
     input_dim: int = 2  # Input dimension (default 2D for visualization)
     output_dim: int = 1  # Output dimension
     bias: bool = True  # Whether to use bias terms
+    skip_connections: bool = False  # Whether to use residual connections
 
     @property
     def depth(self) -> int:
@@ -79,6 +80,7 @@ class NeuralElement:
         input_dim: int = 2,
         output_dim: int = 1,
         bias: bool = True,
+        skip_connections: bool = False,
         name: Optional[str] = None,
         seed: Optional[int] = None
     ):
@@ -87,7 +89,8 @@ class NeuralElement:
             activation=activation,
             input_dim=input_dim,
             output_dim=output_dim,
-            bias=bias
+            bias=bias,
+            skip_connections=skip_connections
         )
 
         # Generate name if not provided
@@ -95,7 +98,8 @@ class NeuralElement:
             act_short = activation[:3].upper()
             depth = len(hidden_layers)
             width = hidden_layers[0] if hidden_layers else 0
-            self.name = f"{act_short}-{depth}x{width}"
+            skip_suffix = "-skip" if skip_connections else ""
+            self.name = f"{act_short}-{depth}x{width}{skip_suffix}"
         else:
             self.name = name
 
@@ -149,10 +153,13 @@ class NeuralElement:
         Returns:
             Output predictions, optionally with intermediate values
         """
-        intermediates = {'pre_activations': [], 'activations': [X]}
+        intermediates = {'pre_activations': [], 'activations': [X], 'skip_applied': []}
 
         current = X
         for i, (W, b) in enumerate(zip(self.weights, self.biases)):
+            # Store input before transformation (for skip connections)
+            layer_input = current
+
             # Linear transformation
             z = current @ W
             if b is not None:
@@ -161,10 +168,21 @@ class NeuralElement:
 
             # Apply activation (except for output layer)
             if i < len(self.weights) - 1:
-                current = self.activation_fn(z)
+                activated = self.activation_fn(z)
+
+                # Apply skip connection if enabled and dimensions match
+                skip_applied = False
+                if self.config.skip_connections and z.shape[1] == layer_input.shape[1]:
+                    current = activated + layer_input  # Residual connection
+                    skip_applied = True
+                else:
+                    current = activated
+
+                intermediates['skip_applied'].append(skip_applied)
             else:
                 # Output layer: sigmoid for binary classification
                 current = 1 / (1 + np.exp(-np.clip(z, -500, 500)))
+                intermediates['skip_applied'].append(False)
 
             intermediates['activations'].append(current)
 
@@ -184,6 +202,10 @@ class NeuralElement:
     def backward(self, X: np.ndarray, y: np.ndarray) -> Tuple[List[np.ndarray], List[np.ndarray]]:
         """
         Backward pass - compute gradients.
+
+        Handles skip connections by splitting gradients:
+        - Through transformation path: delta * activation_grad(z)
+        - Through skip path: delta (identity)
 
         Returns:
             Tuple of (weight_gradients, bias_gradients)
@@ -213,9 +235,17 @@ class NeuralElement:
 
             # Propagate delta to previous layer
             if i > 0:
-                delta = (delta @ self.weights[i].T) * self.activation_fn.grad(
+                # Gradient through the transformation path
+                delta_transform = (delta @ self.weights[i].T) * self.activation_fn.grad(
                     intermediates['pre_activations'][i - 1]
                 )
+
+                # If skip connection was applied at this layer, add identity gradient
+                if intermediates['skip_applied'][i - 1]:
+                    # Skip connection: gradient flows through both paths
+                    delta = delta_transform + delta
+                else:
+                    delta = delta_transform
 
         return weight_grads, bias_grads
 
@@ -340,6 +370,7 @@ class NeuralElement:
             input_dim=self.config.input_dim,
             output_dim=self.config.output_dim,
             bias=self.config.bias,
+            skip_connections=self.config.skip_connections,
             name=self.name,
             seed=None  # Don't copy seed to get different initialization
         )
@@ -360,6 +391,7 @@ class NeuralElement:
                 'input_dim': self.config.input_dim,
                 'output_dim': self.config.output_dim,
                 'bias': self.config.bias,
+                'skip_connections': self.config.skip_connections,
             },
             'properties': {
                 'depth': self.config.depth,
@@ -408,6 +440,7 @@ class NeuralElement:
             input_dim=config['input_dim'],
             output_dim=config['output_dim'],
             bias=config['bias'],
+            skip_connections=config.get('skip_connections', False),
             name=data['name']
         )
 

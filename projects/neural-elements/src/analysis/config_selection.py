@@ -113,14 +113,16 @@ def get_config_key(
     activation: str,
     depth: int,
     width: int,
-    dataset: str
+    dataset: str,
+    skip_connections: bool = False
 ) -> str:
     """
     Generate a unique key for a configuration.
 
     Used for grouping trials of the same configuration.
     """
-    return f"{activation}_d{depth}_w{width}_{dataset}"
+    skip_suffix = "_skip" if skip_connections else ""
+    return f"{activation}_d{depth}_w{width}_{dataset}{skip_suffix}"
 
 
 def parse_config_key(key: str) -> Dict[str, Any]:
@@ -128,18 +130,100 @@ def parse_config_key(key: str) -> Dict[str, Any]:
     Parse a configuration key back into components.
 
     Args:
-        key: Configuration key like "relu_d3_w8_spirals"
+        key: Configuration key like "relu_d3_w8_spirals" or "relu_d3_w8_spirals_skip"
 
     Returns:
-        Dictionary with activation, depth, width, dataset
+        Dictionary with activation, depth, width, dataset, skip_connections
     """
     parts = key.split('_')
+    skip_connections = len(parts) > 4 and parts[-1] == 'skip'
     return {
         'activation': parts[0],
         'depth': int(parts[1][1:]),  # Remove 'd' prefix
         'width': int(parts[2][1:]),   # Remove 'w' prefix
         'dataset': parts[3],
+        'skip_connections': skip_connections,
     }
+
+
+@dataclass
+class Phase4Config:
+    """
+    Configuration for Phase 4: Extended Depth Study.
+
+    Tests deeper networks (6-10 layers) and skip connections to answer:
+    - Does sigmoid collapse to random chance (50%)?
+    - Does sine remain stable at extreme depths?
+    - Do skip connections rescue deep networks?
+
+    Total: 4 activations x 4 depths x 4 datasets x 20 trials x 2 variants = 2,560 experiments
+    """
+
+    # Focus activations (key behaviors from Phase 3)
+    activations: List[str] = field(default_factory=lambda: [
+        'sigmoid',     # Shows depth degradation - find the limit
+        'relu',        # Baseline control
+        'sine',        # Exceptional on hard tasks - test stability
+        'tanh',        # Strong performer - control
+    ])
+
+    # Extended depths beyond Phase 3
+    depths: List[int] = field(default_factory=lambda: [6, 7, 8, 10])
+
+    # Fixed width (same as Phase 3 for comparability)
+    width: int = 8
+
+    # Datasets (same as Phase 3)
+    datasets: List[str] = field(default_factory=lambda: [
+        'xor',       # Simple nonlinearity test
+        'moons',     # Medium difficulty
+        'circles',   # Radial boundary
+        'spirals',   # Hard, needs depth/capacity
+    ])
+
+    # Number of trials for statistical robustness
+    n_trials: int = 20
+
+    # Skip connections toggle
+    skip_connections: bool = False
+
+    # Training parameters (may need adjustment for deeper networks)
+    training_config: Dict[str, Any] = field(default_factory=lambda: {
+        'epochs': 500,
+        'learning_rate': 0.1,
+        'record_every': 50,
+    })
+
+    def get_element_configs(self) -> List[Dict[str, Any]]:
+        """Generate all element configurations for Phase 4."""
+        configs = []
+        for activation in self.activations:
+            for depth in self.depths:
+                configs.append({
+                    'hidden_layers': [self.width] * depth,
+                    'activation': activation,
+                    'skip_connections': self.skip_connections,
+                })
+        return configs
+
+    def get_total_experiments(self) -> int:
+        """Calculate total number of experiments."""
+        n_configs = len(self.activations) * len(self.depths)
+        return n_configs * len(self.datasets) * self.n_trials
+
+    def get_summary(self) -> Dict[str, Any]:
+        """Get a summary of the configuration."""
+        return {
+            'activations': self.activations,
+            'depths': self.depths,
+            'width': self.width,
+            'datasets': self.datasets,
+            'n_trials': self.n_trials,
+            'skip_connections': self.skip_connections,
+            'n_element_configs': len(self.activations) * len(self.depths),
+            'total_experiments': self.get_total_experiments(),
+            'training_config': self.training_config,
+        }
 
 
 def estimate_runtime(
