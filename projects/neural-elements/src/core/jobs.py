@@ -725,7 +725,7 @@ def phase8_stacking_worker(args: Tuple) -> Dict:
         trainer.train(X, y)
 
         # Evaluate bottom element
-        bottom_output = bottom_element.forward(X)
+        bottom_output = bottom_element.forward(X).flatten()
         bottom_acc = float(np.mean((bottom_output > 0.5).astype(int) == y))
 
         # 2. Freeze bottom element and get hidden representations
@@ -754,7 +754,7 @@ def phase8_stacking_worker(args: Tuple) -> Dict:
 
         # 4. Evaluate combined (stacked) performance
         # To evaluate stacked: forward through bottom, then through top
-        combined_output = top_element.forward(hidden_rep)
+        combined_output = top_element.forward(hidden_rep).flatten()
         combined_acc = float(np.mean((combined_output > 0.5).astype(int) == y))
         stack_improvement = combined_acc - bottom_acc
 
@@ -873,7 +873,7 @@ def phase8_transfer_worker(args: Tuple) -> Dict:
         trainer_pretrained = Trainer(pretrained_element, config)
         history = trainer_pretrained.train(X_target, y_target)
 
-        pretrained_output = pretrained_element.forward(X_target)
+        pretrained_output = pretrained_element.forward(X_target).flatten()
         pretrained_acc = float(np.mean((pretrained_output > 0.5).astype(int) == y_target))
 
         # 4. Train from scratch on target (baseline)
@@ -886,7 +886,7 @@ def phase8_transfer_worker(args: Tuple) -> Dict:
         trainer_scratch = Trainer(scratch_element, config)
         trainer_scratch.train(X_target, y_target)
 
-        scratch_output = scratch_element.forward(X_target)
+        scratch_output = scratch_element.forward(X_target).flatten()
         scratch_acc = float(np.mean((scratch_output > 0.5).astype(int) == y_target))
 
         training_time = time.time() - start_time
@@ -986,13 +986,14 @@ def phase8_ensemble_worker(args: Tuple) -> Dict:
             trainer = Trainer(element, config)
             trainer.train(X, y)
 
-            output = element.forward(X)
+            output = element.forward(X).flatten()
             acc = float(np.mean((output > 0.5).astype(int) == y))
             individual_accs.append(acc)
             elements.append(element)
 
         # 2. Combine predictions based on ensemble_type
-        predictions = np.array([elem.forward(X) for elem in elements])  # (ensemble_size, n_samples, 1)
+        # Get flattened predictions from each element: (ensemble_size, n_samples)
+        predictions = np.array([elem.forward(X).flatten() for elem in elements])
 
         if ensemble_type == 'averaging':
             # Average probabilities
