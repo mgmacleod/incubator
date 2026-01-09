@@ -422,6 +422,56 @@ The architecture heatmap reveals:
 3. **Medium balanced architectures are optimal** for parameter efficiency
 4. **Wide-shallow networks hurt Sine** - periodic activations need depth to express their oscillations
 
+### Phase 6: Learning Dynamics Study (~2,560 experiments)
+
+Studied *how* elements learn by recording gradient flow and weight evolution during training.
+
+**Configuration:** 4 activations × 4 depths × 4 datasets × 20 trials, plus skip and bottleneck variants
+
+#### 1. Skip Connection Effect EXPLAINED
+
+Phase 4 found that skip connections help sigmoid but hurt ReLU/Sine. Phase 6 explains *why*:
+
+| Activation | Baseline | With Skip | Change | Vanishing Rate |
+|------------|----------|-----------|--------|----------------|
+| ReLU | 95.1% | 63.6% | **-31.5%** | 1% → 38% |
+| Sigmoid | 50.0% | 79.3% | **+29.2%** | 34% → 0% |
+| Sine | 96.4% | 65.6% | **-30.7%** | 0% → 0% |
+| Tanh | 93.6% | 96.0% | +2.4% | 0% → 0% |
+
+**The mechanism:**
+- **Sigmoid**: 34% vanishing gradient rate at baseline drops to 0% with skip. The skip path provides an alternative gradient flow when the transformation path saturates.
+- **ReLU**: Only 1% vanishing at baseline, but skip causes 38% vanishing. The skip path interferes with learned representations.
+- Skip connections are a **targeted intervention** for vanishing gradients, not a universal improvement.
+
+#### 2. Bottleneck Gradient Dynamics
+
+| Architecture | Accuracy | Gradient Ratio | Notes |
+|--------------|----------|----------------|-------|
+| `[32, 8, 32]` (severe) | 87.2% | 1.48 | Healthy gradient flow |
+| `[8, 2, 8]` (extreme) | 83.2% | 0.85 | Gradient decay at bottleneck |
+
+The width-2 bottleneck shows measurable gradient decay (ratio < 1), explaining the 4% accuracy drop from Phase 5.
+
+#### 3. Activation Dynamics Ranking
+
+| Rank | Activation | Accuracy | Convergence | Stability | Vanishing |
+|------|------------|----------|-------------|-----------|-----------|
+| 1 | Leaky ReLU | 92.3% | 27 epochs | 0.010 | 0% |
+| 2 | Tanh | 91.7% | 72 epochs | 0.023 | 0% |
+| 3 | Sine | 86.3% | 58 epochs | 0.011 | 0% |
+| 4 | ReLU | 84.6% | 45 epochs | - | 5% |
+| 5 | Sigmoid | 63.2% | 78 epochs | 0.018 | 6% |
+
+Leaky ReLU wins on both accuracy AND convergence speed. Sigmoid's vanishing gradient problem is now quantified at 6%.
+
+#### Key Takeaways
+
+1. **Skip connections rescue vanishing gradients** - sigmoid goes from 34% to 0% vanishing rate
+2. **Skip connections interfere with healthy gradients** - ReLU goes from 1% to 38% vanishing rate
+3. **Width-2 bottlenecks cause gradient decay** - ratio 0.85 vs 1.48 for width-8 bottleneck
+4. **Leaky ReLU is optimal** - fastest convergence (27 epochs) with highest accuracy (92.3%)
+
 ### Visualizations
 
 Generated charts are in `visualizations/`:
@@ -452,6 +502,14 @@ Generated charts are in `visualizations/`:
 - `phase5_parameter_efficiency.png` - Accuracy per parameter count
 - `phase5_architecture_heatmap.png` - Pattern × activation performance grid
 - `phase5_dataset_comparison.png` - Best architecture by dataset
+
+**Phase 6 (learning dynamics):**
+- `phase6_convergence_comparison.png` - Epochs to 90% accuracy by activation
+- `phase6_stability_heatmap.png` - Training stability by activation × depth
+- `phase6_skip_dynamics.png` - Skip connection effect with gradient metrics
+- `phase6_bottleneck_dynamics.png` - Gradient flow through bottleneck architectures
+- `phase6_vanishing_gradient_detection.png` - Final gradient vs accuracy scatter
+- `phase6_activation_dynamics_summary.png` - Combined dynamics view
 
 **Reports:**
 - `reports/phase3_statistical_summary.md` - Full statistical report

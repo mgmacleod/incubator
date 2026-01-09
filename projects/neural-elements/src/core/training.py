@@ -22,6 +22,8 @@ class TrainingConfig:
     lr_schedule: Optional[str] = None  # 'cosine', 'step', None
     early_stopping_patience: Optional[int] = None
     record_every: int = 10
+    record_gradients: bool = False  # Record gradient statistics per layer
+    record_weight_stats: bool = False  # Record weight distribution statistics
 
 
 class Trainer:
@@ -80,6 +82,10 @@ class Trainer:
         if X_val is not None:
             self.history['val_loss'] = []
             self.history['val_accuracy'] = []
+        if self.config.record_gradients:
+            self.history['gradient_stats'] = []
+        if self.config.record_weight_stats:
+            self.history['weight_stats'] = []
 
         # Initialize momentum velocities
         if self.config.momentum > 0:
@@ -139,6 +145,27 @@ class Trainer:
                 self.history['loss'].append(float(loss))
                 self.history['accuracy'].append(float(accuracy))
                 self.history['learning_rate'].append(float(lr))
+
+                # Record gradient statistics (compute on full dataset for consistency)
+                if self.config.record_gradients:
+                    full_weight_grads, _ = self.element.backward(X, y)
+                    grad_stats = {
+                        'epoch': epoch,
+                        'layer_grad_norms': [float(np.linalg.norm(g)) for g in full_weight_grads],
+                        'max_grad': float(max(np.max(np.abs(g)) for g in full_weight_grads)),
+                        'mean_grad': float(np.mean([np.mean(np.abs(g)) for g in full_weight_grads])),
+                    }
+                    self.history['gradient_stats'].append(grad_stats)
+
+                # Record weight distribution statistics
+                if self.config.record_weight_stats:
+                    weight_stats = {
+                        'epoch': epoch,
+                        'layer_weight_norms': [float(np.linalg.norm(W)) for W in self.element.weights],
+                        'mean_weight': float(np.mean([np.mean(W) for W in self.element.weights])),
+                        'std_weight': float(np.mean([np.std(W) for W in self.element.weights])),
+                    }
+                    self.history['weight_stats'].append(weight_stats)
 
                 # Validation metrics
                 if X_val is not None:

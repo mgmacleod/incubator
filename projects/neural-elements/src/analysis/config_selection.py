@@ -316,6 +316,126 @@ class Phase5Config:
         }
 
 
+@dataclass
+class Phase6Config:
+    """
+    Configuration for Phase 6: Learning Dynamics Study.
+
+    Studies *how* elements learn by recording gradient flow and weight evolution.
+    Tests configurations from Phase 4/5 that showed interesting behaviors.
+
+    Experiment breakdown:
+    - Baseline uniform: 4 activations × 4 depths × 4 datasets × 20 trials = 1,280
+    - Skip variants: 4 activations × 2 depths × 4 datasets × 20 trials = 640
+    - Bottleneck archs: 2 archs × 4 activations × 4 datasets × 20 trials = 640
+    Total: ~2,560 experiments
+    """
+
+    # Focus on activations that showed interesting behaviors
+    activations: List[str] = field(default_factory=lambda: [
+        'relu',        # Baseline, hurt by skip connections at depth
+        'sigmoid',     # Collapses at depth, rescued by skip
+        'sine',        # Stable at extreme depths, hurt by skip
+        'tanh',        # Graceful degradation
+    ])
+
+    # Depths covering key transition points
+    depths: List[int] = field(default_factory=lambda: [1, 3, 5, 8])
+
+    # Fixed width (same as Phase 3-4 for comparability)
+    width: int = 8
+
+    # Bottleneck architectures from Phase 5
+    bottleneck_architectures: Dict[str, List[int]] = field(default_factory=lambda: {
+        'bottleneck_severe': [32, 8, 32],
+        'bottleneck_extreme': [8, 2, 8],
+    })
+
+    # Datasets
+    datasets: List[str] = field(default_factory=lambda: [
+        'xor',
+        'moons',
+        'circles',
+        'spirals',
+    ])
+
+    # Number of trials for statistical robustness
+    n_trials: int = 20
+
+    # Training parameters - more epochs and frequent recording for dynamics
+    training_config: Dict[str, Any] = field(default_factory=lambda: {
+        'epochs': 1000,
+        'learning_rate': 0.1,
+        'record_every': 10,
+        'record_gradients': True,
+        'record_weight_stats': True,
+    })
+
+    def get_element_configs(self) -> List[Dict[str, Any]]:
+        """Generate all element configurations for Phase 6."""
+        configs = []
+
+        # 1. Baseline uniform configurations (no skip)
+        for activation in self.activations:
+            for depth in self.depths:
+                configs.append({
+                    'hidden_layers': [self.width] * depth,
+                    'activation': activation,
+                    'skip_connections': False,
+                })
+
+        # 2. Skip connection variants (depths 5 and 8 only)
+        for activation in self.activations:
+            for depth in [5, 8]:
+                configs.append({
+                    'hidden_layers': [self.width] * depth,
+                    'activation': activation,
+                    'skip_connections': True,
+                })
+
+        # 3. Bottleneck architectures (no skip)
+        for arch_name, hidden_layers in self.bottleneck_architectures.items():
+            for activation in self.activations:
+                configs.append({
+                    'hidden_layers': hidden_layers,
+                    'activation': activation,
+                    'skip_connections': False,
+                })
+
+        return configs
+
+    def get_total_experiments(self) -> int:
+        """Calculate total number of experiments."""
+        n_configs = len(self.get_element_configs())
+        return n_configs * len(self.datasets) * self.n_trials
+
+    def get_summary(self) -> Dict[str, Any]:
+        """Get a summary of the configuration."""
+        configs = self.get_element_configs()
+
+        # Count by type
+        baseline_count = len(self.activations) * len(self.depths)
+        skip_count = len(self.activations) * 2  # depths 5, 8
+        bottleneck_count = len(self.bottleneck_architectures) * len(self.activations)
+
+        return {
+            'activations': self.activations,
+            'depths': self.depths,
+            'width': self.width,
+            'bottleneck_architectures': self.bottleneck_architectures,
+            'datasets': self.datasets,
+            'n_trials': self.n_trials,
+            'n_element_configs': len(configs),
+            'breakdown': {
+                'baseline': baseline_count,
+                'skip_variants': skip_count,
+                'bottleneck': bottleneck_count,
+            },
+            'total_experiments': self.get_total_experiments(),
+            'training_config': self.training_config,
+        }
+
+
 def estimate_runtime(
     n_experiments: int,
     n_workers: int = 8,
