@@ -113,9 +113,7 @@ class NeuralElement:
         }
         self.trained = False
         self._training_snapshots: List[Dict] = []
-
-        # Layer freezing for transfer learning (Phase 8)
-        self.frozen_layers: List[bool] = []
+        # Note: frozen_layers is initialized in _init_weights() after weights are created
 
     def _init_weights(self):
         """Initialize weights using Xavier/He initialization."""
