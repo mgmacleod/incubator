@@ -1,46 +1,36 @@
 # Neural Elements - Scaling Plan
 
-## Current State (Phase 2 Complete)
+## Current State (Phase 3 Complete)
 
+### Phase 2: Initial Exploration
 **Experiments Run:** 2,316
 **Coverage:**
 - 8 activations: ReLU, Tanh, GELU, Sigmoid, Sine, Swish, Leaky ReLU, Linear
 - 5 depths: 1-5 hidden layers
 - 4 widths: 2, 4, 8, 16
-- 9 datasets: XOR, moons, circles, spirals, checkerboard, rings, gaussian_clusters, swiss_roll_2d, linear
+- 4 datasets: XOR, moons, circles, spirals
 - ~5 trials per configuration
 
-**Key Findings:**
-1. **Sigmoid collapses** from 70% → 49% accuracy at 5 layers (vanishing gradients)
-2. **Sine is exceptional** - 100% XOR success, best on spirals, stable at depth
-3. **Leaky ReLU** consistently outperforms standard ReLU
-4. **Width=2 bottleneck** causes severe degradation across all activations
-5. **Width > depth** for constrained parameter budgets
+### Phase 3: Statistical Robustness (COMPLETE)
+**Experiments Run:** 2,400
+**Coverage:**
+- 6 activations: ReLU, Tanh, GELU, Sigmoid, Sine, Leaky ReLU
+- 5 depths: 1-5 hidden layers
+- Fixed width: 8
+- 4 datasets: XOR, moons, circles, spirals
+- 20 trials per configuration
 
----
+**Key Statistical Findings:**
+1. **Top activations are statistically equivalent** - Leaky ReLU, ReLU, Sine, Tanh, GELU show no significant differences (p > 0.05 after Bonferroni)
+2. **Sigmoid is significantly worse** than all others (p < 0.001)
+3. **Leaky ReLU vs ReLU**: 0.5% difference, NOT significant (p = 0.86)
+4. **Sigmoid at depth 5**: 53.6% accuracy, approaching random chance
 
-## Phase 3: Statistical Robustness (Recommended Next)
-
-**Goal:** Reduce variance in estimates for cleaner signal
-
-**Changes:**
-- Increase trials from 5 → 20 per configuration
-- Focus on key configurations (remove redundant ones)
-- Add confidence intervals to all measurements
-
-**Estimated experiments:** ~3,000 additional
-**Estimated time:** 15-20 minutes on 16-core machine
-
-```python
-# Phase 3 configuration
-n_trials = 20
-element_configs = [
-    # Core periodic table (depth × activation)
-    *[{'hidden_layers': [8]*d, 'activation': a}
-      for d in [1,2,3,4,5] for a in ['relu','tanh','gelu','sigmoid','sine']],
-]
-datasets = ['xor', 'spirals', 'moons', 'circles']  # 4 most informative
-```
+**Deliverables:**
+- `data/phase3_summary.csv` - Aggregated statistics
+- `visualizations/phase3_*.png` - Charts with confidence intervals
+- `reports/phase3_statistical_summary.md` - Full report
+- `examples/run_significance_tests.py` - Pairwise comparisons
 
 ---
 

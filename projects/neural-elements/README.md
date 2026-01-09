@@ -238,38 +238,48 @@ curl http://localhost:5000/api/bulk/experiments/<experiment_id>
 | `/api/bulk/experiments/<id>` | GET | Load experiment with weights |
 | `/api/bulk/experiments/<id>/training-lab` | GET | Get experiment in Training Lab format |
 
-## Experimental Results (2,316 experiments)
+## Experimental Results
 
-### Key Discoveries
+### Phase 2: Initial Exploration (2,316 experiments)
+
+Explored 8 activations × 5 depths × 4 widths × 4 datasets with ~5 trials each.
+
+### Phase 3: Statistical Robustness (2,400 experiments)
+
+Focused study with 20 trials per configuration for reliable confidence intervals.
+
+**Configuration:** 6 activations × 5 depths × 4 datasets × 20 trials
+
+### Key Discoveries (with Statistical Validation)
 
 #### 1. Sigmoid Collapse with Depth
 Sigmoid networks degrade predictably with depth due to vanishing gradients:
-| Depth | Accuracy | Change |
-|-------|----------|--------|
-| 1 layer | 70.2% | - |
-| 2 layers | 64.4% | -5.8% |
-| 3 layers | 60.5% | -3.9% |
-| 4 layers | 56.5% | -4.1% |
-| 5 layers | **48.6%** | -7.8% |
+| Depth | Accuracy | 95% CI | Change |
+|-------|----------|--------|--------|
+| 1 layer | 67.0% | [64.1%, 69.9%] | - |
+| 2 layers | 64.2% | [61.2%, 67.2%] | -2.8% |
+| 3 layers | 60.5% | [57.3%, 63.7%] | -3.7% |
+| 4 layers | 54.4% | [51.1%, 57.7%] | -6.1% |
+| 5 layers | **53.6%** | [50.2%, 57.0%] | -0.8% |
 
-At 5 layers, sigmoid performs **worse than random chance**.
+At 5 layers, sigmoid approaches **random chance (50%)**.
 
 #### 2. Sine Activation is Exceptional
-- **100% XOR success** - every trial achieved perfect accuracy
-- **Best on spirals** - maintains 77% accuracy at 5 layers while others degrade
+- **100% XOR success** - every trial across all depths achieved perfect accuracy
+- **Best on spirals** - 83% at depth 5 with CI [80.7%, 85.3%]
 - Stable training dynamics across all depths
 
-#### 3. Activation Ranking (Overall)
-| Rank | Activation | Avg Accuracy |
-|------|------------|--------------|
-| 1 | Leaky ReLU | 88.7% |
-| 2 | Tanh | 87.2% |
-| 3 | GELU | 87.2% |
-| 4 | Sine | 87.1% |
-| 5 | ReLU | 86.5% |
-| 6 | Swish | 80.6% |
-| 7 | Linear | 63.8% |
-| 8 | Sigmoid | 63.7% |
+#### 3. Activation Ranking (with 95% CI)
+| Rank | Activation | Avg Accuracy | 95% CI |
+|------|------------|--------------|--------|
+| 1 | Leaky ReLU | 92.2% | [91.3%, 93.1%] |
+| 2 | ReLU | 91.7% | [90.6%, 92.8%] |
+| 3 | Sine | 90.7% | [88.8%, 92.6%] |
+| 4 | Tanh | 89.8% | [88.6%, 90.9%] |
+| 5 | GELU | 86.4% | [83.9%, 88.9%] |
+| 6 | Sigmoid | 59.9% | [57.0%, 62.9%] |
+
+**Statistical note:** Top 5 activations form a statistically equivalent group (p > 0.05 after Bonferroni correction). Only sigmoid is significantly worse than all others.
 
 #### 4. Width vs Depth Trade-off
 For ReLU networks with similar parameter counts:
@@ -280,20 +290,41 @@ For ReLU networks with similar parameter counts:
 **Lesson:** Width beats depth when networks are narrow. The 2-neuron bottleneck is devastating.
 
 #### 5. Dataset-Specific Patterns
-| Dataset | Best Activation | Accuracy |
-|---------|-----------------|----------|
-| XOR | Sine | 100% |
-| Moons | Leaky ReLU | 93.6% |
-| Circles | Leaky ReLU | 94.3% |
-| Spirals | Sine | 72.9% |
+| Dataset | Best Activation | Depth | Accuracy | 95% CI |
+|---------|-----------------|-------|----------|--------|
+| XOR | GELU | 1 | 100.0% | [100%, 100%] |
+| Moons | Tanh | 5 | 100.0% | [100%, 100%] |
+| Circles | Leaky ReLU | 4 | 100.0% | [100%, 100%] |
+| Spirals | Sine | 5 | 83.0% | [80.7%, 85.3%] |
+
+### Statistical Findings (Phase 3)
+
+Using pairwise t-tests with Bonferroni correction:
+
+1. **Sigmoid is significantly worse** than all other activations (p < 0.001)
+2. **Top activations are statistically equivalent** - Leaky ReLU, ReLU, Sine, Tanh, GELU show no significant differences
+3. **Leaky ReLU vs ReLU**: Only 0.5% difference, NOT significant (p = 0.86)
+4. **Sine vs ReLU on spirals**: 3.4% difference, NOT significant after correction (p = 0.39)
 
 ### Visualizations
 
 Generated charts are in `visualizations/`:
+
+**Phase 2:**
 - `periodic_table_heatmap.png` - Full accuracy heatmap by depth × activation
 - `depth_effect.png` - How each activation responds to depth
 - `dataset_comparison.png` - Performance breakdown by dataset
 - `width_effect.png` - Width vs depth trade-offs
+
+**Phase 3 (with confidence intervals):**
+- `phase3_depth_effect_ci.png` - Depth effect with shaded CI bands
+- `phase3_activation_ranking_ci.png` - Ranking with error bars
+- `phase3_dataset_comparison_ci.png` - Per-dataset with CI
+- `phase3_variance_reliability.png` - Accuracy vs reliability scatter
+- `phase3_activation_boxplots.png` - Distribution box plots
+
+**Reports:**
+- `reports/phase3_statistical_summary.md` - Full statistical report
 
 ## Notes and Learnings
 
