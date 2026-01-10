@@ -711,3 +711,112 @@ def estimate_runtime(
         'total_minutes': total_seconds / 60,
         'experiments_per_second': n_workers / avg_seconds_per_experiment,
     }
+
+
+@dataclass
+class Phase9Config:
+    """
+    Configuration for Phase 9: Evolutionary Discovery.
+
+    Uses genetic algorithms to discover optimal neural element architectures
+    beyond grid-based exploration.
+
+    Design decisions:
+    - Mixed activations: Per-layer activation support
+    - Fitness: Weighted sum (60% accuracy + 20% efficiency + 10% speed + 10% robustness)
+    - Seeding: 30% Phase 3-8 winners + 70% random
+
+    Estimated experiments: population_size * n_generations * ~2.5 (quick + full eval)
+    """
+
+    # Population parameters
+    population_size: int = 50
+    n_elite: int = 2
+    tournament_size: int = 3
+
+    # Evolution rates
+    crossover_rate: float = 0.8
+    mutation_rate: float = 0.2
+
+    # Training parameters
+    quick_epochs: int = 50
+    full_epochs: int = 500
+    quick_accuracy_threshold: float = 0.55
+
+    # Architecture constraints
+    min_depth: int = 1
+    max_depth: int = 10
+    min_width: int = 2
+    max_width: int = 64
+
+    # Datasets
+    datasets: List[str] = field(default_factory=lambda: [
+        'xor', 'moons', 'circles', 'spirals',
+    ])
+
+    # Number of generations
+    n_generations: int = 30
+
+    # Diversity parameters
+    min_genome_distance: float = 0.15
+
+    # Early stopping
+    early_stop_patience: int = 10
+    early_stop_min_improvement: float = 0.001
+
+    # Checkpointing
+    checkpoint_every: int = 5
+
+    def get_estimated_experiments(self) -> int:
+        """
+        Estimate total training runs.
+
+        Each genome is evaluated ~2.5 times on average:
+        - Quick screening (all genomes)
+        - Full evaluation (~60% pass screening)
+        """
+        return int(self.population_size * self.n_generations * 2.5 * len(self.datasets))
+
+    def get_summary(self) -> Dict[str, Any]:
+        """Get a summary of the configuration."""
+        return {
+            'population_size': self.population_size,
+            'n_generations': self.n_generations,
+            'n_elite': self.n_elite,
+            'tournament_size': self.tournament_size,
+            'crossover_rate': self.crossover_rate,
+            'mutation_rate': self.mutation_rate,
+            'quick_epochs': self.quick_epochs,
+            'full_epochs': self.full_epochs,
+            'quick_accuracy_threshold': self.quick_accuracy_threshold,
+            'architecture_constraints': {
+                'min_depth': self.min_depth,
+                'max_depth': self.max_depth,
+                'min_width': self.min_width,
+                'max_width': self.max_width,
+            },
+            'datasets': self.datasets,
+            'estimated_experiments': self.get_estimated_experiments(),
+        }
+
+    def to_evolution_config(self) -> 'EvolutionConfig':
+        """Convert to EvolutionConfig for the engine."""
+        from ..evolution.engine import EvolutionConfig
+        return EvolutionConfig(
+            population_size=self.population_size,
+            n_elite=self.n_elite,
+            tournament_size=self.tournament_size,
+            crossover_rate=self.crossover_rate,
+            mutation_rate=self.mutation_rate,
+            quick_epochs=self.quick_epochs,
+            full_epochs=self.full_epochs,
+            quick_accuracy_threshold=self.quick_accuracy_threshold,
+            min_depth=self.min_depth,
+            max_depth=self.max_depth,
+            min_width=self.min_width,
+            max_width=self.max_width,
+            min_genome_distance=self.min_genome_distance,
+            early_stop_patience=self.early_stop_patience,
+            early_stop_min_improvement=self.early_stop_min_improvement,
+            checkpoint_every=self.checkpoint_every,
+        )

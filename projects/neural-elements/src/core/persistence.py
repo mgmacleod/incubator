@@ -74,6 +74,15 @@ class TrainingResult:
     ensemble_accuracy: Optional[float] = None
     ensemble_improvement: Optional[float] = None  # ensemble - best_individual
 
+    # Phase 9 evolution fields (optional for backward compatibility)
+    genome_id: Optional[str] = None
+    generation: Optional[int] = None
+    fitness_primary: Optional[float] = None  # Same as test_accuracy
+    fitness_efficiency: Optional[float] = None  # accuracy / log(params)
+    fitness_speed: Optional[float] = None  # 1 / epochs_to_convergence
+    fitness_robustness: Optional[float] = None  # noise robustness score
+    pareto_rank: Optional[int] = None  # 0 = on Pareto front
+
 
 class ExperimentStore:
     """
